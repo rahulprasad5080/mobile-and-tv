@@ -34,7 +34,6 @@ android {
 
 dependencies {
     implementation(libs.androidx-core-ktx)
-    implementation(libs.androidx-appcompat)
     
     // Media3
     implementation(libs.androidx-media3-exoplayer)
