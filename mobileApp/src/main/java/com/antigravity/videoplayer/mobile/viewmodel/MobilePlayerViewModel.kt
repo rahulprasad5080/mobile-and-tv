@@ -1,6 +1,8 @@
 package com.antigravity.videoplayer.mobile.viewmodel
 
 import android.app.Application
+import android.content.Context
+import android.media.AudioManager
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.antigravity.videoplayer.core.model.VideoMediaItem
@@ -14,6 +16,7 @@ import kotlinx.coroutines.launch
 class MobilePlayerViewModel(application: Application) : AndroidViewModel(application) {
 
     val playerManager = PlayerManager(application)
+    private val audioManager = application.getSystemService(Context.AUDIO_SERVICE) as AudioManager
     
     private val _isPlaying = MutableStateFlow(true)
     val isPlaying: StateFlow<Boolean> = _isPlaying.asStateFlow()
@@ -27,9 +30,19 @@ class MobilePlayerViewModel(application: Application) : AndroidViewModel(applica
     private val _showControls = MutableStateFlow(true)
     val showControls: StateFlow<Boolean> = _showControls.asStateFlow()
 
+    private val _volume = MutableStateFlow(0f)
+    val volume: StateFlow<Float> = _volume.asStateFlow()
+
+    private val _brightness = MutableStateFlow(0.5f)
+    val brightness: StateFlow<Float> = _brightness.asStateFlow()
+
     init {
         playerManager.initializePlayer()
         startProgressUpdate()
+        
+        val maxVolume = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC).toFloat()
+        val currentVolume = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC).toFloat()
+        _volume.value = currentVolume / maxVolume
     }
 
     private fun startProgressUpdate() {
@@ -65,6 +78,18 @@ class MobilePlayerViewModel(application: Application) : AndroidViewModel(applica
 
     fun toggleControls() {
         _showControls.value = !_showControls.value
+    }
+
+    fun adjustVolume(delta: Float) {
+        val maxVolume = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
+        val currentVolume = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)
+        val newVolume = (currentVolume + (delta * maxVolume)).toInt().coerceIn(0, maxVolume)
+        audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, newVolume, 0)
+        _volume.value = newVolume.toFloat() / maxVolume
+    }
+
+    fun adjustBrightness(newBrightness: Float) {
+        _brightness.value = newBrightness.coerceIn(0f, 1f)
     }
 
     override fun onCleared() {

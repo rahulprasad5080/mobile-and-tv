@@ -8,29 +8,49 @@ import android.util.Rational
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
+import androidx.compose.runtime.Composable
+import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.rememberNavController
 import com.antigravity.videoplayer.core.model.VideoMediaItem
+import com.antigravity.videoplayer.mobile.ui.screen.home.HomeScreen
 import com.antigravity.videoplayer.mobile.ui.screen.player.VideoPlayerScreen
+import com.antigravity.videoplayer.mobile.viewmodel.HomeViewModel
 import com.antigravity.videoplayer.mobile.viewmodel.MobilePlayerViewModel
 
 class MainActivity : ComponentActivity() {
 
-    private val viewModel: MobilePlayerViewModel by viewModels()
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         
-        val sampleItem = VideoMediaItem(
-            id = "sample_1",
-            title = "Big Buck Bunny",
-            uri = Uri.parse("https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4")
-        )
-        viewModel.playMedia(sampleItem)
-
         setContent {
-            VideoPlayerScreen(
-                viewModel = viewModel,
-                onBackPressed = { finish() }
-            )
+            AppNavigation()
+        }
+    }
+
+    @Composable
+    fun AppNavigation() {
+        val navController = rememberNavController()
+        val playerViewModel: MobilePlayerViewModel = viewModel()
+        val homeViewModel: HomeViewModel = viewModel()
+
+        NavHost(navController = navController, startDestination = "home") {
+            composable("home") {
+                HomeScreen(
+                    viewModel = homeViewModel,
+                    onVideoClick = { video ->
+                        playerViewModel.playMedia(video)
+                        navController.navigate("player")
+                    }
+                )
+            }
+            composable("player") {
+                VideoPlayerScreen(
+                    viewModel = playerViewModel,
+                    onBackPressed = { navController.popBackStack() }
+                )
+            }
         }
     }
 
