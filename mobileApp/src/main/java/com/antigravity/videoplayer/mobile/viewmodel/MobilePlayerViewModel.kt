@@ -36,6 +36,15 @@ class MobilePlayerViewModel(application: Application) : AndroidViewModel(applica
     private val _brightness = MutableStateFlow(0.5f)
     val brightness: StateFlow<Float> = _brightness.asStateFlow()
 
+    private val _isLocked = MutableStateFlow(false)
+    val isLocked: StateFlow<Boolean> = _isLocked.asStateFlow()
+
+    private val _playbackSpeed = MutableStateFlow(1.0f)
+    val playbackSpeed: StateFlow<Float> = _playbackSpeed.asStateFlow()
+
+    private val _resizeMode = MutableStateFlow(0) // 0: Fit, 3: Fill, 4: Zoom
+    val resizeMode: StateFlow<Int> = _resizeMode.asStateFlow()
+
     init {
         playerManager.initializePlayer()
         startProgressUpdate()
@@ -90,6 +99,22 @@ class MobilePlayerViewModel(application: Application) : AndroidViewModel(applica
 
     fun adjustBrightness(newBrightness: Float) {
         _brightness.value = newBrightness.coerceIn(0f, 1f)
+    }
+
+    fun toggleLock() {
+        _isLocked.value = !_isLocked.value
+        if (_isLocked.value) {
+            _showControls.value = false
+        }
+    }
+
+    fun setPlaybackSpeed(speed: Float) {
+        _playbackSpeed.value = speed
+        playerManager.getPlayer()?.setPlaybackSpeed(speed)
+    }
+
+    fun setResizeMode(mode: Int) {
+        _resizeMode.value = mode
     }
 
     override fun onCleared() {

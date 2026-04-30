@@ -1,7 +1,7 @@
 package com.antigravity.videoplayer.core.player
 
 import android.content.Context
-import androidx.annotation.OptIn
+import kotlin.OptIn
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem

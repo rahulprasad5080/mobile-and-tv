@@ -5,6 +5,8 @@ import android.net.Uri
 data class VideoMediaItem(
     val id: String,
     val title: String,
+    val description: String = "",
+    val thumbnailUri: Uri? = null,
     val uri: Uri,
     val mimeType: String? = null,
     val subtitles: List<SubtitleTrack> = emptyList()

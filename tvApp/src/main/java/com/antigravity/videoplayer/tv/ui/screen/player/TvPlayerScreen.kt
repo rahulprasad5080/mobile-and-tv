@@ -2,7 +2,7 @@ package com.antigravity.videoplayer.tv.ui.screen.player
 
 import android.view.ViewGroup
 import android.widget.FrameLayout
-import androidx.annotation.OptIn
+import kotlin.OptIn
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*

@@ -52,7 +52,7 @@ class MainActivity : ComponentActivity() {
                 )
             }
         }
-    }
+    } 
 
     override fun onUserLeaveHint() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
