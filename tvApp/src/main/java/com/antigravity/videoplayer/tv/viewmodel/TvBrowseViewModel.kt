@@ -1,6 +1,7 @@
 package com.antigravity.videoplayer.tv.viewmodel
 
-import androidx.lifecycle.ViewModel
+import android.app.Application
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.antigravity.videoplayer.core.model.VideoMediaItem
 import com.antigravity.videoplayer.core.repository.VideoRepository
@@ -9,7 +10,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
-class TvBrowseViewModel : ViewModel() {
+class TvBrowseViewModel(application: Application) : AndroidViewModel(application) {
     private val repository = VideoRepository()
     
     private val _videos = MutableStateFlow<List<VideoMediaItem>>(emptyList())
@@ -21,7 +22,7 @@ class TvBrowseViewModel : ViewModel() {
 
     private fun loadVideos() {
         viewModelScope.launch {
-            repository.getVideos().collect {
+            repository.getVideos(getApplication()).collect {
                 _videos.value = it
             }
         }
