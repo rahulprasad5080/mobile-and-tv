@@ -21,6 +21,9 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private val _searchQuery = MutableStateFlow("")
     val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
 
+    private val _recentlyPlayed = MutableStateFlow<List<VideoMediaItem>>(emptyList())
+    val recentlyPlayed: StateFlow<List<VideoMediaItem>> = _recentlyPlayed.asStateFlow()
+
     val videos: StateFlow<List<VideoMediaItem>> = combine(_videos, _searchQuery) { videos, query ->
         if (query.isBlank()) {
             videos
@@ -28,10 +31,6 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             videos.filter { it.title.contains(query, ignoreCase = true) }
         }
     }.stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
-
-    init {
-        loadVideos()
-    }
 
     fun loadVideos() {
         viewModelScope.launch {
@@ -43,5 +42,12 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
     fun onSearchQueryChange(query: String) {
         _searchQuery.value = query
+    }
+
+    fun addToRecentlyPlayed(video: VideoMediaItem) {
+        val currentList = _recentlyPlayed.value.toMutableList()
+        currentList.remove(video)
+        currentList.add(0, video)
+        _recentlyPlayed.value = currentList.take(10)
     }
 }

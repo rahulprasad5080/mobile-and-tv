@@ -10,6 +10,7 @@ import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.viewModels
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.core.content.ContextCompat
@@ -24,12 +25,13 @@ import com.antigravity.videoplayer.mobile.viewmodel.MobilePlayerViewModel
 
 class MainActivity : ComponentActivity() {
 
+    private val homeViewModel: HomeViewModel by viewModels()
+
     private val requestPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { isGranted: Boolean ->
         if (isGranted) {
-            // Permission granted, refresh videos
-            // This will be handled by the ViewModel when it initializes or we can trigger it
+            homeViewModel.loadVideos()
         } else {
             Toast.makeText(this, "Permission denied to read videos", Toast.LENGTH_SHORT).show()
         }
@@ -54,7 +56,7 @@ class MainActivity : ComponentActivity() {
 
         when {
             ContextCompat.checkSelfPermission(this, permission) == PackageManager.PERMISSION_GRANTED -> {
-                // Permission already granted
+                homeViewModel.loadVideos()
             }
             else -> {
                 requestPermissionLauncher.launch(permission)
@@ -66,18 +68,13 @@ class MainActivity : ComponentActivity() {
     fun AppNavigation() {
         val navController = rememberNavController()
         val playerViewModel: MobilePlayerViewModel = viewModel()
-        val homeViewModel: HomeViewModel = viewModel()
-
-        // Refresh videos when permission is granted or on start
-        LaunchedEffect(Unit) {
-            homeViewModel.loadVideos()
-        }
 
         NavHost(navController = navController, startDestination = "home") {
             composable("home") {
                 HomeScreen(
                     viewModel = homeViewModel,
                     onVideoClick = { video ->
+                        homeViewModel.addToRecentlyPlayed(video)
                         playerViewModel.playMedia(video)
                         navController.navigate("player")
                     }
