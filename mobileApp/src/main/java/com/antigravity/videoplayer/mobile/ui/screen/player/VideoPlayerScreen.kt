@@ -6,8 +6,7 @@ import android.widget.FrameLayout
 import kotlin.OptIn
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.*
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
@@ -326,24 +325,7 @@ fun VideoPlayerScreen(
                             )
                         }
                         
-                        Spacer(modifier = Modifier.height(16.dp))
-                        
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceEvenly
-                        ) {
-                            AdvancedControlOption(Icons.Rounded.Speed, "${playbackSpeed}x") { showSettings = true }
-                            AdvancedControlOption(Icons.Rounded.AspectRatio, "Resize") { 
-                                val nextMode = when(resizeMode) {
-                                    0 -> 3
-                                    3 -> 4
-                                    else -> 0
-                                }
-                                viewModel.setResizeMode(nextMode)
-                            }
-                            AdvancedControlOption(Icons.Rounded.Timer, "Sleep") { /* Sleep logic */ }
-                            AdvancedControlOption(Icons.Rounded.Subtitles, "Subs") { /* Subs logic */ }
-                        }
+
                     }
                 } else {
                     // Locked State UI
@@ -368,6 +350,10 @@ fun VideoPlayerScreen(
         AdvancedSettingsDialog(
             currentSpeed = playbackSpeed,
             onSpeedChange = { viewModel.setPlaybackSpeed(it) },
+            resizeMode = resizeMode,
+            onResizeModeChange = { viewModel.setResizeMode(it) },
+            onSleepClick = { /* Sleep logic */ },
+            onSubsClick = { /* Subs logic */ },
             onDismiss = { showSettings = false }
         )
     }
@@ -396,6 +382,10 @@ fun AdvancedControlOption(icon: ImageVector, label: String, onClick: () -> Unit)
 fun AdvancedSettingsDialog(
     currentSpeed: Float,
     onSpeedChange: (Float) -> Unit,
+    resizeMode: Int,
+    onResizeModeChange: (Int) -> Unit,
+    onSleepClick: () -> Unit,
+    onSubsClick: () -> Unit,
     onDismiss: () -> Unit
 ) {
     AlertDialog(
@@ -411,19 +401,50 @@ fun AdvancedSettingsDialog(
             ) 
         },
         text = {
-            Column {
-                Text("Speed", color = PrimaryAccent, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+            Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Playback Speed", color = PrimaryAccent, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                    Text(
+                        text = "${"%.2f".format(currentSpeed)}x",
+                        color = Color.White,
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier
+                            .background(PrimaryAccent.copy(alpha = 0.2f), RoundedCornerShape(8.dp))
+                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                    )
+                }
                 Spacer(modifier = Modifier.height(12.dp))
-                val speeds = listOf(0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 2.0f)
+                Slider(
+                    value = currentSpeed,
+                    onValueChange = { onSpeedChange(it) },
+                    valueRange = 0.25f..3.0f,
+                    colors = SliderDefaults.colors(
+                        thumbColor = PrimaryAccent,
+                        activeTrackColor = PrimaryAccent,
+                        inactiveTrackColor = Color.White.copy(alpha = 0.1f)
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                )
+                
+                Spacer(modifier = Modifier.height(24.dp))
+
+                Text("Aspect Ratio", color = PrimaryAccent, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                Spacer(modifier = Modifier.height(12.dp))
+                val modes = listOf(0 to "Fit", 3 to "Fill", 4 to "Zoom")
                 FlowRow(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    speeds.forEach { speed ->
+                    modes.forEach { (mode, label) ->
                         FilterChip(
-                            selected = currentSpeed == speed,
-                            onClick = { onSpeedChange(speed) },
-                            label = { Text("${speed}x", color = if (currentSpeed == speed) Color.White else Color.Gray) },
+                            selected = resizeMode == mode,
+                            onClick = { onResizeModeChange(mode) },
+                            label = { Text(label, color = if (resizeMode == mode) Color.White else Color.Gray) },
                             colors = FilterChipDefaults.filterChipColors(
                                 selectedContainerColor = PrimaryAccent,
                                 containerColor = Color.White.copy(alpha = 0.05f)
@@ -437,25 +458,15 @@ fun AdvancedSettingsDialog(
                 
                 Text("Video Tools", color = PrimaryAccent, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
                 Spacer(modifier = Modifier.height(12.dp))
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(
-                        onClick = { }, 
-                        colors = ButtonDefaults.buttonColors(containerColor = Color.White.copy(alpha = 0.1f)),
-                        modifier = Modifier.weight(1f)
-                    ) { 
-                        Icon(Icons.Rounded.ScreenRotation, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("Rotate", fontSize = 12.sp)
-                    }
-                    Button(
-                        onClick = { },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color.White.copy(alpha = 0.1f)),
-                        modifier = Modifier.weight(1f)
-                    ) { 
-                        Icon(Icons.Rounded.Screenshot, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("Capture", fontSize = 12.sp)
-                    }
+                FlowRow(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    SettingsToolButton(Icons.Rounded.Timer, "Sleep", onSleepClick)
+                    SettingsToolButton(Icons.Rounded.Subtitles, "Subs", onSubsClick)
+                    SettingsToolButton(Icons.Rounded.ScreenRotation, "Rotate", {})
+                    SettingsToolButton(Icons.Rounded.Screenshot, "Capture", {})
                 }
             }
         },
@@ -465,6 +476,20 @@ fun AdvancedSettingsDialog(
             }
         }
     )
+}
+
+@Composable
+fun SettingsToolButton(icon: ImageVector, label: String, onClick: () -> Unit) {
+    Button(
+        onClick = onClick,
+        colors = ButtonDefaults.buttonColors(containerColor = Color.White.copy(alpha = 0.1f)),
+        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+        modifier = Modifier.height(40.dp)
+    ) { 
+        Icon(icon, contentDescription = null, modifier = Modifier.size(18.dp))
+        Spacer(modifier = Modifier.width(8.dp))
+        Text(label, fontSize = 12.sp)
+    }
 }
 
 fun formatTime(ms: Long): String {
