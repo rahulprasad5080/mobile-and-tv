@@ -5,44 +5,41 @@ import android.view.ViewGroup
 import android.widget.FrameLayout
 import kotlin.OptIn
 import androidx.compose.animation.*
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.util.UnstableApi
-import androidx.media3.ui.CaptionStyleCompat
 import androidx.media3.ui.PlayerView
 import com.antigravity.videoplayer.mobile.viewmodel.MobilePlayerViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+
+private val TransparentBlack = Color.Black.copy(alpha = 0.5f)
+private val DeepBlack = Color(0xFF0C0C0C)
+private val PrimaryAccent = Color(0xFF3F51B5) // Indigo
 
 @androidx.annotation.OptIn(UnstableApi::class)
 @OptIn(UnstableApi::class)
@@ -65,6 +62,7 @@ fun VideoPlayerScreen(
 
     var showSettings by remember { mutableStateOf(false) }
     var gestureInfo by remember { mutableStateOf<String?>(null) }
+    var gestureIcon by remember { mutableStateOf<ImageVector?>(null) }
     val scope = rememberCoroutineScope()
 
     LaunchedEffect(brightness) {
@@ -81,16 +79,21 @@ fun VideoPlayerScreen(
             .pointerInput(isLocked) {
                 if (!isLocked) {
                     detectVerticalDragGestures(
-                        onDragEnd = { gestureInfo = null },
+                        onDragEnd = { 
+                            gestureInfo = null
+                            gestureIcon = null 
+                        },
                         onVerticalDrag = { change, dragAmount ->
                             val isLeftSide = change.position.x < size.width / 2
                             if (isLeftSide) {
                                 val newBrightness = (brightness - dragAmount / size.height).coerceIn(0f, 1f)
                                 viewModel.adjustBrightness(newBrightness)
-                                gestureInfo = "Brightness: ${(newBrightness * 100).toInt()}%"
+                                gestureInfo = "${(newBrightness * 100).toInt()}%"
+                                gestureIcon = Icons.Rounded.BrightnessMedium
                             } else {
                                 viewModel.adjustVolume(-dragAmount / size.height)
-                                gestureInfo = "Volume: ${(volume * 100).toInt()}%"
+                                gestureInfo = "${(volume * 100).toInt()}%"
+                                gestureIcon = Icons.Rounded.VolumeUp
                             }
                         }
                     )
@@ -99,11 +102,15 @@ fun VideoPlayerScreen(
             .pointerInput(isLocked) {
                 if (!isLocked) {
                     detectHorizontalDragGestures(
-                        onDragEnd = { gestureInfo = null },
+                        onDragEnd = { 
+                            gestureInfo = null
+                            gestureIcon = null
+                        },
                         onHorizontalDrag = { _, dragAmount ->
                             val seekAmount = (dragAmount * 100).toLong()
                             viewModel.seekTo(currentPosition + seekAmount)
-                            gestureInfo = "Seek: ${formatTime(currentPosition)}"
+                            gestureInfo = formatTime(currentPosition)
+                            gestureIcon = Icons.Rounded.FastForward
                         }
                     )
                 }
@@ -116,13 +123,16 @@ fun VideoPlayerScreen(
                             if (isLeftSide) {
                                 viewModel.seekTo(currentPosition - 10000)
                                 gestureInfo = "-10s"
+                                gestureIcon = Icons.Rounded.Replay10
                             } else {
                                 viewModel.seekTo(currentPosition + 10000)
                                 gestureInfo = "+10s"
+                                gestureIcon = Icons.Rounded.Forward10
                             }
                             scope.launch {
-                                delay(500)
+                                delay(600)
                                 gestureInfo = null
+                                gestureIcon = null
                             }
                         }
                     },
@@ -148,84 +158,133 @@ fun VideoPlayerScreen(
             modifier = Modifier.fillMaxSize()
         )
 
-        // Gesture Feedback
+        // Gesture Feedback UI
         AnimatedVisibility(
             visible = gestureInfo != null,
             enter = fadeIn() + scaleIn(),
             exit = fadeOut() + scaleOut(),
             modifier = Modifier.align(Alignment.Center)
         ) {
-            Surface(
-                color = Color.Black.copy(alpha = 0.6f),
-                shape = CircleShape
-            ) {
-                Text(
-                    text = gestureInfo ?: "",
-                    color = Color.White,
-                    modifier = Modifier.padding(horizontal = 24.dp, vertical = 12.dp),
-                    style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.Bold
-                )
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                gestureIcon?.let {
+                    Icon(
+                        it, 
+                        contentDescription = null, 
+                        tint = Color.White, 
+                        modifier = Modifier.size(64.dp)
+                    )
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+                Surface(
+                    color = Color.Black.copy(alpha = 0.5f),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text(
+                        text = gestureInfo ?: "",
+                        color = Color.White,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
             }
         }
 
         // Overlay Controls
         AnimatedVisibility(
             visible = showControls,
-            enter = fadeIn(),
-            exit = fadeOut()
+            enter = fadeIn() + expandVertically(),
+            exit = fadeOut() + shrinkVertically()
         ) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.4f))
+                    .background(
+                        Brush.verticalGradient(
+                            listOf(
+                                Color.Black.copy(alpha = 0.7f),
+                                Color.Transparent,
+                                Color.Transparent,
+                                Color.Black.copy(alpha = 0.7f)
+                            )
+                        )
+                    )
             ) {
                 if (!isLocked) {
                     // Top Bar
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
+                            .statusBarsPadding()
                             .padding(16.dp),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        IconButton(onClick = onBackPressed) {
-                            Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = Color.White)
+                        IconButton(
+                            onClick = onBackPressed,
+                            modifier = Modifier.background(TransparentBlack, CircleShape)
+                        ) {
+                            Icon(Icons.Rounded.ArrowBack, contentDescription = "Back", tint = Color.White)
                         }
+                        
                         Text(
                             text = "Now Playing",
                             color = Color.White,
-                            style = MaterialTheme.typography.titleMedium
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
                         )
-                        Row {
-                            IconButton(onClick = { viewModel.toggleLock() }) {
-                                Icon(Icons.Default.LockOpen, contentDescription = "Lock", tint = Color.White)
+                        
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            IconButton(
+                                onClick = { viewModel.toggleLock() },
+                                modifier = Modifier.background(TransparentBlack, CircleShape)
+                            ) {
+                                Icon(Icons.Rounded.LockOpen, contentDescription = "Lock", tint = Color.White)
                             }
-                            IconButton(onClick = { showSettings = true }) {
-                                Icon(Icons.Default.Settings, contentDescription = "Settings", tint = Color.White)
+                            IconButton(
+                                onClick = { showSettings = true },
+                                modifier = Modifier.background(TransparentBlack, CircleShape)
+                            ) {
+                                Icon(Icons.Rounded.Settings, contentDescription = "Settings", tint = Color.White)
                             }
                         }
                     }
 
-                    // Middle Controls
-                    Row(
-                        modifier = Modifier.align(Alignment.Center),
-                        horizontalArrangement = Arrangement.spacedBy(48.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        IconButton(onClick = { viewModel.seekTo(currentPosition - 10000) }) {
-                            Icon(Icons.Default.Replay10, contentDescription = "Rewind", tint = Color.White, modifier = Modifier.size(48.dp))
-                        }
-                        IconButton(onClick = { viewModel.togglePlayPause() }) {
-                            Icon(
-                                if (isPlaying) Icons.Default.PauseCircleFilled else Icons.Default.PlayCircleFilled,
-                                contentDescription = "Play/Pause",
-                                tint = Color.White,
-                                modifier = Modifier.size(80.dp)
-                            )
-                        }
-                        IconButton(onClick = { viewModel.seekTo(currentPosition + 10000) }) {
-                            Icon(Icons.Default.Forward10, contentDescription = "Fast Forward", tint = Color.White, modifier = Modifier.size(48.dp))
+                    // Middle Controls (Advanced High Level)
+                    Box(modifier = Modifier.align(Alignment.Center)) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(40.dp)
+                        ) {
+                            IconButton(
+                                onClick = { viewModel.seekTo(currentPosition - 10000) },
+                                modifier = Modifier.size(56.dp).background(TransparentBlack, CircleShape)
+                            ) {
+                                Icon(Icons.Rounded.Replay10, contentDescription = "Rewind", tint = Color.White, modifier = Modifier.size(32.dp))
+                            }
+
+                            Box(
+                                modifier = Modifier
+                                    .size(90.dp)
+                                    .clip(CircleShape)
+                                    .background(PrimaryAccent.copy(alpha = 0.8f))
+                                    .clickable { viewModel.togglePlayPause() },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    if (isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
+                                    contentDescription = "Play/Pause",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(56.dp)
+                                )
+                            }
+
+                            IconButton(
+                                onClick = { viewModel.seekTo(currentPosition + 10000) },
+                                modifier = Modifier.size(56.dp).background(TransparentBlack, CircleShape)
+                            ) {
+                                Icon(Icons.Rounded.Forward10, contentDescription = "Fast Forward", tint = Color.White, modifier = Modifier.size(32.dp))
+                            }
                         }
                     }
 
@@ -233,23 +292,38 @@ fun VideoPlayerScreen(
                     Column(
                         modifier = Modifier
                             .align(Alignment.BottomCenter)
-                            .padding(bottom = 32.dp, start = 24.dp, end = 24.dp)
+                            .navigationBarsPadding()
+                            .padding(bottom = 24.dp, start = 20.dp, end = 20.dp)
                     ) {
-                        Slider(
-                            value = if (duration > 0) currentPosition.toFloat() / duration else 0f,
-                            onValueChange = { viewModel.seekTo((it * duration).toLong()) },
-                            colors = SliderDefaults.colors(
-                                thumbColor = MaterialTheme.colorScheme.primary,
-                                activeTrackColor = MaterialTheme.colorScheme.primary,
-                                inactiveTrackColor = Color.White.copy(alpha = 0.3f)
-                            )
-                        )
                         Row(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text(text = formatTime(currentPosition), color = Color.White, style = MaterialTheme.typography.bodyMedium)
-                            Text(text = formatTime(duration), color = Color.White, style = MaterialTheme.typography.bodyMedium)
+                            Text(
+                                text = formatTime(currentPosition), 
+                                color = Color.White, 
+                                style = MaterialTheme.typography.labelLarge,
+                                fontWeight = FontWeight.Bold
+                            )
+                            
+                            Slider(
+                                value = if (duration > 0) currentPosition.toFloat() / duration else 0f,
+                                onValueChange = { viewModel.seekTo((it * duration).toLong()) },
+                                modifier = Modifier.weight(1f).padding(horizontal = 12.dp),
+                                colors = SliderDefaults.colors(
+                                    thumbColor = PrimaryAccent,
+                                    activeTrackColor = PrimaryAccent,
+                                    inactiveTrackColor = Color.White.copy(alpha = 0.3f)
+                                )
+                            )
+                            
+                            Text(
+                                text = formatTime(duration), 
+                                color = Color.White, 
+                                style = MaterialTheme.typography.labelLarge,
+                                fontWeight = FontWeight.Bold
+                            )
                         }
                         
                         Spacer(modifier = Modifier.height(16.dp))
@@ -258,8 +332,8 @@ fun VideoPlayerScreen(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceEvenly
                         ) {
-                            ControlOption(Icons.Default.Speed, "${playbackSpeed}x") { showSettings = true }
-                            ControlOption(Icons.Default.AspectRatio, "Resize") { 
+                            AdvancedControlOption(Icons.Rounded.Speed, "${playbackSpeed}x") { showSettings = true }
+                            AdvancedControlOption(Icons.Rounded.AspectRatio, "Resize") { 
                                 val nextMode = when(resizeMode) {
                                     0 -> 3
                                     3 -> 4
@@ -267,8 +341,8 @@ fun VideoPlayerScreen(
                                 }
                                 viewModel.setResizeMode(nextMode)
                             }
-                            ControlOption(Icons.Default.Timer, "Sleep") { /* Sleep timer logic */ }
-                            ControlOption(Icons.Default.Subtitles, "Subs") { /* Subs logic */ }
+                            AdvancedControlOption(Icons.Rounded.Timer, "Sleep") { /* Sleep logic */ }
+                            AdvancedControlOption(Icons.Rounded.Subtitles, "Subs") { /* Subs logic */ }
                         }
                     }
                 } else {
@@ -278,10 +352,11 @@ fun VideoPlayerScreen(
                             onClick = { viewModel.toggleLock() },
                             modifier = Modifier
                                 .align(Alignment.CenterStart)
-                                .padding(16.dp)
-                                .background(Color.Black.copy(alpha = 0.5f), CircleShape)
+                                .padding(24.dp)
+                                .size(56.dp)
+                                .background(Color.Black.copy(alpha = 0.6f), CircleShape)
                         ) {
-                            Icon(Icons.Default.Lock, contentDescription = "Unlock", tint = Color.White)
+                            Icon(Icons.Rounded.Lock, contentDescription = "Unlock", tint = Color.White, modifier = Modifier.size(32.dp))
                         }
                     }
                 }
@@ -290,7 +365,7 @@ fun VideoPlayerScreen(
     }
 
     if (showSettings) {
-        SettingsDialog(
+        AdvancedSettingsDialog(
             currentSpeed = playbackSpeed,
             onSpeedChange = { viewModel.setPlaybackSpeed(it) },
             onDismiss = { showSettings = false }
@@ -299,30 +374,47 @@ fun VideoPlayerScreen(
 }
 
 @Composable
-fun ControlOption(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, onClick: () -> Unit) {
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
+fun AdvancedControlOption(icon: ImageVector, label: String, onClick: () -> Unit) {
+    Surface(
+        color = Color.White.copy(alpha = 0.1f),
+        shape = RoundedCornerShape(12.dp),
         modifier = Modifier.clickable(onClick = onClick)
     ) {
-        Icon(icon, contentDescription = null, tint = Color.White, modifier = Modifier.size(24.dp))
-        Text(text = label, color = Color.White, style = MaterialTheme.typography.labelSmall)
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Icon(icon, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
+            Text(text = label, color = Color.White, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
+        }
     }
 }
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun SettingsDialog(
+fun AdvancedSettingsDialog(
     currentSpeed: Float,
     onSpeedChange: (Float) -> Unit,
     onDismiss: () -> Unit
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Playback Settings") },
+        containerColor = DeepBlack,
+        shape = RoundedCornerShape(28.dp),
+        title = { 
+            Text(
+                "Playback Settings", 
+                color = Color.White, 
+                fontWeight = FontWeight.ExtraBold,
+                fontSize = 20.sp
+            ) 
+        },
         text = {
             Column {
-                Text("Playback Speed", style = MaterialTheme.typography.titleSmall)
-                val speeds = listOf(0.25f, 0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 2.0f)
+                Text("Speed", color = PrimaryAccent, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                Spacer(modifier = Modifier.height(12.dp))
+                val speeds = listOf(0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 2.0f)
                 FlowRow(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -331,23 +423,46 @@ fun SettingsDialog(
                         FilterChip(
                             selected = currentSpeed == speed,
                             onClick = { onSpeedChange(speed) },
-                            label = { Text("${speed}x") }
+                            label = { Text("${speed}x", color = if (currentSpeed == speed) Color.White else Color.Gray) },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = PrimaryAccent,
+                                containerColor = Color.White.copy(alpha = 0.05f)
+                            ),
+                            border = null
                         )
                     }
                 }
                 
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(24.dp))
                 
-                Text("Sleep Timer", style = MaterialTheme.typography.titleSmall)
+                Text("Video Tools", color = PrimaryAccent, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                Spacer(modifier = Modifier.height(12.dp))
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(onClick = { }) { Text("Off") }
-                    Button(onClick = { }) { Text("30m") }
-                    Button(onClick = { }) { Text("60m") }
+                    Button(
+                        onClick = { }, 
+                        colors = ButtonDefaults.buttonColors(containerColor = Color.White.copy(alpha = 0.1f)),
+                        modifier = Modifier.weight(1f)
+                    ) { 
+                        Icon(Icons.Rounded.ScreenRotation, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Rotate", fontSize = 12.sp)
+                    }
+                    Button(
+                        onClick = { },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color.White.copy(alpha = 0.1f)),
+                        modifier = Modifier.weight(1f)
+                    ) { 
+                        Icon(Icons.Rounded.Screenshot, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Capture", fontSize = 12.sp)
+                    }
                 }
             }
         },
         confirmButton = {
-            TextButton(onClick = onDismiss) { Text("Close") }
+            TextButton(onClick = onDismiss) { 
+                Text("Done", color = PrimaryAccent, fontWeight = FontWeight.Bold) 
+            }
         }
     )
 }
