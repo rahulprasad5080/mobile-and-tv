@@ -31,7 +31,6 @@ import com.antigravity.videoplayer.mobile.viewmodel.HomeViewModel
 private val DarkBackground = Color(0xFF0F0F0F)
 private val SurfaceColor = Color(0xFF1E1E1E)
 private val PrimaryAccent = Color(0xFF3F51B5) // Indigo
-private val SecondaryAccent = Color(0xFF00BCD4) // Cyan
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -72,17 +71,7 @@ fun HomeScreen(
                         )
                     }
                     
-                    Surface(
-                        color = PrimaryAccent.copy(alpha = 0.2f),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Icon(
-                            Icons.Default.VideoLibrary,
-                            contentDescription = null,
-                            tint = PrimaryAccent,
-                            modifier = Modifier.padding(8.dp).size(24.dp)
-                        )
-                    }
+
                 }
                 
                 Spacer(modifier = Modifier.height(20.dp))
