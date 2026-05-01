@@ -108,6 +108,9 @@ class PlayerManager(private val context: Context) {
     }
 
     fun resume() {
+        if (exoPlayer?.playbackState == Player.STATE_ENDED) {
+            exoPlayer?.seekTo(0)
+        }
         exoPlayer?.play()
     }
 
