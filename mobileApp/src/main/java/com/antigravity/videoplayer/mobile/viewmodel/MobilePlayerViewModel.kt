@@ -8,6 +8,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.antigravity.videoplayer.core.model.VideoMediaItem
 import com.antigravity.videoplayer.core.player.PlayerManager
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -48,6 +49,8 @@ class MobilePlayerViewModel(application: Application) : AndroidViewModel(applica
 
     private val _orientationMode = MutableStateFlow(ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE)
     val orientationMode: StateFlow<Int> = _orientationMode.asStateFlow()
+
+    private var hideJob: Job? = null
 
     init {
         playerManager.initializePlayer()
@@ -91,6 +94,17 @@ class MobilePlayerViewModel(application: Application) : AndroidViewModel(applica
 
     fun toggleControls() {
         _showControls.value = !_showControls.value
+        if (_showControls.value) {
+            resetHideTimer()
+        }
+    }
+
+    fun resetHideTimer() {
+        hideJob?.cancel()
+        hideJob = viewModelScope.launch {
+            delay(3500)
+            _showControls.value = false
+        }
     }
 
     fun adjustVolume(delta: Float) {

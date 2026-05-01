@@ -123,8 +123,10 @@ fun VideoPlayerScreen(
                             
                             if (totalDragAmountVertical > 20f) {
                                 dragDirection = DragDirection.VERTICAL
+                                viewModel.resetHideTimer() // Keep controls visible if they are
                             } else if (totalDragAmountHorizontal > 20f) {
                                 dragDirection = DragDirection.HORIZONTAL
+                                viewModel.resetHideTimer()
                             }
                         }
 
@@ -263,11 +265,12 @@ fun VideoPlayerScreen(
             }
         }
 
-        // Overlay Controls
+        // Overlay Controls (Smooth Transitions)
+        // 1. Background Gradient
         AnimatedVisibility(
             visible = showControls,
-            enter = fadeIn() + expandVertically(),
-            exit = fadeOut() + shrinkVertically()
+            enter = fadeIn(animationSpec = tween(400)),
+            exit = fadeOut(animationSpec = tween(400))
         ) {
             Box(
                 modifier = Modifier
@@ -282,144 +285,190 @@ fun VideoPlayerScreen(
                             )
                         )
                     )
+            )
+        }
+
+        if (!isLocked) {
+            // 2. Top Bar
+            AnimatedVisibility(
+                visible = showControls,
+                enter = fadeIn() + slideInVertically { -it },
+                exit = fadeOut() + slideOutVertically { -it },
+                modifier = Modifier.align(Alignment.TopCenter)
             ) {
-                if (!isLocked) {
-                    // Top Bar
-                    Row(
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .statusBarsPadding()
+                        .padding(16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    IconButton(
+                        onClick = onBackPressed,
+                        modifier = Modifier.background(TransparentBlack, CircleShape)
+                    ) {
+                        Icon(Icons.Rounded.ArrowBack, contentDescription = "Back", tint = Color.White)
+                    }
+                    
+                    Text(
+                        text = "Now Playing",
+                        color = Color.White,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                    
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        IconButton(
+                            onClick = { 
+                                viewModel.toggleOrientation()
+                                viewModel.resetHideTimer()
+                            },
+                            modifier = Modifier.background(TransparentBlack, CircleShape)
+                        ) {
+                            Icon(Icons.Rounded.ScreenRotation, contentDescription = "Rotate", tint = Color.White)
+                        }
+                        IconButton(
+                            onClick = { 
+                                viewModel.toggleLock()
+                                viewModel.resetHideTimer()
+                            },
+                            modifier = Modifier.background(TransparentBlack, CircleShape)
+                        ) {
+                            Icon(Icons.Rounded.LockOpen, contentDescription = "Lock", tint = Color.White)
+                        }
+                        IconButton(
+                            onClick = { 
+                                showSettings = true
+                                viewModel.resetHideTimer()
+                            },
+                            modifier = Modifier.background(TransparentBlack, CircleShape)
+                        ) {
+                            Icon(Icons.Rounded.Settings, contentDescription = "Settings", tint = Color.White)
+                        }
+                    }
+                }
+            }
+
+            // 3. Middle Controls
+            AnimatedVisibility(
+                visible = showControls,
+                enter = fadeIn() + scaleIn(initialScale = 0.8f),
+                exit = fadeOut() + scaleOut(targetScale = 0.8f),
+                modifier = Modifier.align(Alignment.Center)
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(28.dp)
+                ) {
+                    IconButton(
+                        onClick = { 
+                            viewModel.seekTo(currentPosition - 10000)
+                            viewModel.resetHideTimer()
+                        },
+                        modifier = Modifier.size(52.dp).background(TransparentBlack, CircleShape)
+                    ) {
+                        Icon(Icons.Rounded.Replay10, contentDescription = "Rewind", tint = Color.White, modifier = Modifier.size(28.dp))
+                    }
+
+                    Box(
                         modifier = Modifier
-                            .fillMaxWidth()
-                            .statusBarsPadding()
-                            .padding(16.dp),
+                            .size(76.dp)
+                            .clip(CircleShape)
+                            .background(PrimaryAccent.copy(alpha = 0.8f))
+                            .clickable { 
+                                viewModel.togglePlayPause()
+                                viewModel.resetHideTimer()
+                            },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            if (isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
+                            contentDescription = "Play/Pause",
+                            tint = Color.White,
+                            modifier = Modifier.size(44.dp)
+                        )
+                    }
+
+                    IconButton(
+                        onClick = { 
+                            viewModel.seekTo(currentPosition + 10000)
+                            viewModel.resetHideTimer()
+                        },
+                        modifier = Modifier.size(52.dp).background(TransparentBlack, CircleShape)
+                    ) {
+                        Icon(Icons.Rounded.Forward10, contentDescription = "Fast Forward", tint = Color.White, modifier = Modifier.size(28.dp))
+                    }
+                }
+            }
+
+            // 4. Bottom Bar
+            AnimatedVisibility(
+                visible = showControls,
+                enter = fadeIn() + slideInVertically { it },
+                exit = fadeOut() + slideOutVertically { it },
+                modifier = Modifier.align(Alignment.BottomCenter)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .navigationBarsPadding()
+                        .padding(bottom = 24.dp, start = 20.dp, end = 20.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        IconButton(
-                            onClick = onBackPressed,
-                            modifier = Modifier.background(TransparentBlack, CircleShape)
-                        ) {
-                            Icon(Icons.Rounded.ArrowBack, contentDescription = "Back", tint = Color.White)
-                        }
-                        
                         Text(
-                            text = "Now Playing",
-                            color = Color.White,
-                            style = MaterialTheme.typography.titleMedium,
+                            text = formatTime(currentPosition), 
+                            color = Color.White, 
+                            style = MaterialTheme.typography.labelLarge,
                             fontWeight = FontWeight.Bold
                         )
                         
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            IconButton(
-                                onClick = { viewModel.toggleOrientation() },
-                                modifier = Modifier.background(TransparentBlack, CircleShape)
-                            ) {
-                                Icon(Icons.Rounded.ScreenRotation, contentDescription = "Rotate", tint = Color.White)
-                            }
-                            IconButton(
-                                onClick = { viewModel.toggleLock() },
-                                modifier = Modifier.background(TransparentBlack, CircleShape)
-                            ) {
-                                Icon(Icons.Rounded.LockOpen, contentDescription = "Lock", tint = Color.White)
-                            }
-                            IconButton(
-                                onClick = { showSettings = true },
-                                modifier = Modifier.background(TransparentBlack, CircleShape)
-                            ) {
-                                Icon(Icons.Rounded.Settings, contentDescription = "Settings", tint = Color.White)
-                            }
-                        }
-                    }
-
-                    // Middle Controls (Advanced High Level)
-                    Box(modifier = Modifier.align(Alignment.Center)) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(28.dp)
-                        ) {
-                            IconButton(
-                                onClick = { viewModel.seekTo(currentPosition - 10000) },
-                                modifier = Modifier.size(52.dp).background(TransparentBlack, CircleShape)
-                            ) {
-                                Icon(Icons.Rounded.Replay10, contentDescription = "Rewind", tint = Color.White, modifier = Modifier.size(28.dp))
-                            }
-
-                            Box(
-                                modifier = Modifier
-                                    .size(76.dp)
-                                    .clip(CircleShape)
-                                    .background(PrimaryAccent.copy(alpha = 0.8f))
-                                    .clickable { viewModel.togglePlayPause() },
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    if (isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
-                                    contentDescription = "Play/Pause",
-                                    tint = Color.White,
-                                    modifier = Modifier.size(44.dp)
-                                )
-                            }
-
-                            IconButton(
-                                onClick = { viewModel.seekTo(currentPosition + 10000) },
-                                modifier = Modifier.size(52.dp).background(TransparentBlack, CircleShape)
-                            ) {
-                                Icon(Icons.Rounded.Forward10, contentDescription = "Fast Forward", tint = Color.White, modifier = Modifier.size(28.dp))
-                            }
-                        }
-                    }
-
-                    // Bottom Controls
-                    Column(
-                        modifier = Modifier
-                            .align(Alignment.BottomCenter)
-                            .navigationBarsPadding()
-                            .padding(bottom = 24.dp, start = 20.dp, end = 20.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = formatTime(currentPosition), 
-                                color = Color.White, 
-                                style = MaterialTheme.typography.labelLarge,
-                                fontWeight = FontWeight.Bold
+                        Slider(
+                            value = if (duration > 0) currentPosition.toFloat() / duration else 0f,
+                            onValueChange = { 
+                                viewModel.seekTo((it * duration).toLong())
+                                viewModel.resetHideTimer()
+                            },
+                            modifier = Modifier.weight(1f).padding(horizontal = 12.dp),
+                            colors = SliderDefaults.colors(
+                                thumbColor = PrimaryAccent,
+                                activeTrackColor = PrimaryAccent,
+                                inactiveTrackColor = Color.White.copy(alpha = 0.3f)
                             )
-                            
-                            Slider(
-                                value = if (duration > 0) currentPosition.toFloat() / duration else 0f,
-                                onValueChange = { viewModel.seekTo((it * duration).toLong()) },
-                                modifier = Modifier.weight(1f).padding(horizontal = 12.dp),
-                                colors = SliderDefaults.colors(
-                                    thumbColor = PrimaryAccent,
-                                    activeTrackColor = PrimaryAccent,
-                                    inactiveTrackColor = Color.White.copy(alpha = 0.3f)
-                                )
-                            )
-                            
-                            Text(
-                                text = formatTime(duration), 
-                                color = Color.White, 
-                                style = MaterialTheme.typography.labelLarge,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
+                        )
                         
-
+                        Text(
+                            text = formatTime(duration), 
+                            color = Color.White, 
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.Bold
+                        )
                     }
-                } else {
-                    // Locked State UI
-                    Box(modifier = Modifier.fillMaxSize()) {
-                        IconButton(
-                            onClick = { viewModel.toggleLock() },
-                            modifier = Modifier
-                                .align(Alignment.CenterStart)
-                                .padding(24.dp)
-                                .size(56.dp)
-                                .background(Color.Black.copy(alpha = 0.6f), CircleShape)
-                        ) {
-                            Icon(Icons.Rounded.Lock, contentDescription = "Unlock", tint = Color.White, modifier = Modifier.size(32.dp))
-                        }
+                }
+            }
+        } else {
+            // Locked State UI
+            AnimatedVisibility(
+                visible = showControls,
+                enter = fadeIn(),
+                exit = fadeOut()
+            ) {
+                Box(modifier = Modifier.fillMaxSize()) {
+                    IconButton(
+                        onClick = { 
+                            viewModel.toggleLock()
+                            viewModel.resetHideTimer()
+                        },
+                        modifier = Modifier
+                            .align(Alignment.CenterStart)
+                            .padding(24.dp)
+                            .size(56.dp)
+                            .background(Color.Black.copy(alpha = 0.6f), CircleShape)
+                    ) {
+                        Icon(Icons.Rounded.Lock, contentDescription = "Unlock", tint = Color.White, modifier = Modifier.size(32.dp))
                     }
                 }
             }
