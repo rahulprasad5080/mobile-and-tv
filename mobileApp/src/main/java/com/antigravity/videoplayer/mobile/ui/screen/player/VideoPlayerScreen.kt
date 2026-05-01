@@ -1,6 +1,7 @@
 package com.antigravity.videoplayer.mobile.ui.screen.player
 
 import android.app.Activity
+import android.content.pm.ActivityInfo
 import android.view.ViewGroup
 import android.widget.FrameLayout
 import kotlin.OptIn
@@ -64,6 +65,7 @@ fun VideoPlayerScreen(
     var gestureInfo by remember { mutableStateOf<String?>(null) }
     var gestureIcon by remember { mutableStateOf<ImageVector?>(null) }
     var activeGesture by remember { mutableStateOf<GestureType?>(null) }
+    val orientationMode by viewModel.orientationMode.collectAsState()
     
     val scope = rememberCoroutineScope()
 
@@ -71,6 +73,16 @@ fun VideoPlayerScreen(
         (context as? Activity)?.window?.attributes?.let {
             it.screenBrightness = brightness
             context.window.attributes = it
+        }
+    }
+
+    LaunchedEffect(orientationMode) {
+        (context as? Activity)?.requestedOrientation = orientationMode
+    }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            (context as? Activity)?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
         }
     }
 
@@ -297,6 +309,12 @@ fun VideoPlayerScreen(
                         
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             IconButton(
+                                onClick = { viewModel.toggleOrientation() },
+                                modifier = Modifier.background(TransparentBlack, CircleShape)
+                            ) {
+                                Icon(Icons.Rounded.ScreenRotation, contentDescription = "Rotate", tint = Color.White)
+                            }
+                            IconButton(
                                 onClick = { viewModel.toggleLock() },
                                 modifier = Modifier.background(TransparentBlack, CircleShape)
                             ) {
@@ -414,6 +432,7 @@ fun VideoPlayerScreen(
             onSpeedChange = { viewModel.setPlaybackSpeed(it) },
             resizeMode = resizeMode,
             onResizeModeChange = { viewModel.setResizeMode(it) },
+            onRotateClick = { viewModel.toggleOrientation() },
             onSleepClick = { /* Sleep logic */ },
             onDismiss = { showSettings = false }
         )
@@ -445,6 +464,7 @@ fun AdvancedSettingsDialog(
     onSpeedChange: (Float) -> Unit,
     resizeMode: Int,
     onResizeModeChange: (Int) -> Unit,
+    onRotateClick: () -> Unit,
     onSleepClick: () -> Unit,
     onDismiss: () -> Unit
 ) {
@@ -524,7 +544,7 @@ fun AdvancedSettingsDialog(
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     SettingsToolButton(Icons.Rounded.Timer, "Sleep", onSleepClick)
-                    SettingsToolButton(Icons.Rounded.ScreenRotation, "Rotate", {})
+                    SettingsToolButton(Icons.Rounded.ScreenRotation, "Rotate", onRotateClick)
                 }
             }
         },

@@ -2,6 +2,7 @@ package com.antigravity.videoplayer.mobile.viewmodel
 
 import android.app.Application
 import android.content.Context
+import android.content.pm.ActivityInfo
 import android.media.AudioManager
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -44,6 +45,9 @@ class MobilePlayerViewModel(application: Application) : AndroidViewModel(applica
 
     private val _resizeMode = MutableStateFlow(0) // 0: Fit, 3: Fill, 4: Zoom
     val resizeMode: StateFlow<Int> = _resizeMode.asStateFlow()
+
+    private val _orientationMode = MutableStateFlow(ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE)
+    val orientationMode: StateFlow<Int> = _orientationMode.asStateFlow()
 
     init {
         playerManager.initializePlayer()
@@ -119,6 +123,14 @@ class MobilePlayerViewModel(application: Application) : AndroidViewModel(applica
 
     fun setResizeMode(mode: Int) {
         _resizeMode.value = mode
+    }
+
+    fun toggleOrientation() {
+        _orientationMode.value = when (_orientationMode.value) {
+            ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE -> ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+            ActivityInfo.SCREEN_ORIENTATION_PORTRAIT -> ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+            else -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+        }
     }
 
     override fun onCleared() {
