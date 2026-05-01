@@ -353,7 +353,6 @@ fun VideoPlayerScreen(
             resizeMode = resizeMode,
             onResizeModeChange = { viewModel.setResizeMode(it) },
             onSleepClick = { /* Sleep logic */ },
-            onSubsClick = { /* Subs logic */ },
             onDismiss = { showSettings = false }
         )
     }
@@ -385,7 +384,6 @@ fun AdvancedSettingsDialog(
     resizeMode: Int,
     onResizeModeChange: (Int) -> Unit,
     onSleepClick: () -> Unit,
-    onSubsClick: () -> Unit,
     onDismiss: () -> Unit
 ) {
     AlertDialog(
@@ -464,9 +462,7 @@ fun AdvancedSettingsDialog(
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     SettingsToolButton(Icons.Rounded.Timer, "Sleep", onSleepClick)
-                    SettingsToolButton(Icons.Rounded.Subtitles, "Subs", onSubsClick)
                     SettingsToolButton(Icons.Rounded.ScreenRotation, "Rotate", {})
-                    SettingsToolButton(Icons.Rounded.Screenshot, "Capture", {})
                 }
             }
         },
