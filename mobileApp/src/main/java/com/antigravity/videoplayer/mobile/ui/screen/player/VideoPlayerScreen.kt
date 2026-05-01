@@ -62,6 +62,8 @@ fun VideoPlayerScreen(
     var showSettings by remember { mutableStateOf(false) }
     var gestureInfo by remember { mutableStateOf<String?>(null) }
     var gestureIcon by remember { mutableStateOf<ImageVector?>(null) }
+    var activeGesture by remember { mutableStateOf<GestureType?>(null) }
+    
     val scope = rememberCoroutineScope()
 
     LaunchedEffect(brightness) {
@@ -79,19 +81,23 @@ fun VideoPlayerScreen(
                 if (!isLocked) {
                     detectVerticalDragGestures(
                         onDragEnd = { 
-                            gestureInfo = null
-                            gestureIcon = null 
+                            scope.launch {
+                                delay(1000)
+                                activeGesture = null
+                                gestureInfo = null
+                                gestureIcon = null
+                            }
                         },
                         onVerticalDrag = { change, dragAmount ->
                             val isLeftSide = change.position.x < size.width / 2
                             if (isLeftSide) {
+                                activeGesture = GestureType.BRIGHTNESS
                                 val newBrightness = (brightness - dragAmount / size.height).coerceIn(0f, 1f)
                                 viewModel.adjustBrightness(newBrightness)
-                                gestureInfo = "${(newBrightness * 100).toInt()}%"
-                                gestureIcon = Icons.Rounded.BrightnessMedium
+                                gestureIcon = Icons.Rounded.LightMode
                             } else {
+                                activeGesture = GestureType.VOLUME
                                 viewModel.adjustVolume(-dragAmount / size.height)
-                                gestureInfo = "${(volume * 100).toInt()}%"
                                 gestureIcon = Icons.Rounded.VolumeUp
                             }
                         }
@@ -157,9 +163,47 @@ fun VideoPlayerScreen(
             modifier = Modifier.fillMaxSize()
         )
 
-        // Gesture Feedback UI
+        // Gesture Feedback UI (Pill style for Brightness/Volume)
+        Row(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 48.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Left Side: Brightness
+            AnimatedVisibility(
+                visible = activeGesture == GestureType.BRIGHTNESS,
+                enter = fadeIn() + slideInHorizontally(),
+                exit = fadeOut() + slideOutHorizontally()
+            ) {
+                VerticalPillIndicator(
+                    value = brightness,
+                    icon = Icons.Rounded.LightMode
+                )
+            }
+
+            Spacer(modifier = Modifier.weight(1f))
+
+            // Right Side: Volume
+            AnimatedVisibility(
+                visible = activeGesture == GestureType.VOLUME,
+                enter = fadeIn() + slideInHorizontally(initialOffsetX = { it }),
+                exit = fadeOut() + slideOutHorizontally(targetOffsetX = { it })
+            ) {
+                VerticalPillIndicator(
+                    value = volume,
+                    icon = Icons.Rounded.VolumeUp,
+                    fillBrush = Brush.verticalGradient(
+                        colors = listOf(Color(0xFFD500F9), Color(0xFF2979FF))
+                    )
+                )
+            }
+        }
+
+        // Horizontal Gesture Feedback (Seek)
         AnimatedVisibility(
-            visible = gestureInfo != null,
+            visible = gestureInfo != null && activeGesture == null,
             enter = fadeIn() + scaleIn(),
             exit = fadeOut() + scaleOut(),
             modifier = Modifier.align(Alignment.Center)
@@ -487,6 +531,56 @@ fun SettingsToolButton(icon: ImageVector, label: String, onClick: () -> Unit) {
         Text(label, fontSize = 12.sp)
     }
 }
+
+@Composable
+fun VerticalPillIndicator(
+    value: Float, // 0f to 1f
+    icon: ImageVector,
+    fillBrush: Brush = Brush.linearGradient(listOf(Color.White, Color.White)),
+    modifier: Modifier = Modifier
+) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = modifier
+    ) {
+        Box(
+            modifier = Modifier
+                .width(42.dp)
+                .height(180.dp)
+                .clip(RoundedCornerShape(24.dp))
+                .background(Color.Black.copy(alpha = 0.4f))
+                .padding(4.dp),
+            contentAlignment = Alignment.BottomCenter
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .fillMaxHeight(value.coerceIn(0.05f, 1f)) // Ensure a tiny bit is always visible
+                    .clip(RoundedCornerShape(20.dp))
+                    .background(fillBrush)
+            )
+        }
+        
+        Spacer(modifier = Modifier.height(16.dp))
+        
+        Box(
+            modifier = Modifier
+                .size(42.dp)
+                .clip(CircleShape)
+                .background(Color.Black.copy(alpha = 0.4f)),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                icon,
+                contentDescription = null,
+                tint = Color.White,
+                modifier = Modifier.size(22.dp)
+            )
+        }
+    }
+}
+
+enum class GestureType { BRIGHTNESS, VOLUME }
 
 fun formatTime(ms: Long): String {
     val totalSeconds = ms / 1000

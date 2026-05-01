@@ -1,11 +1,9 @@
 package com.antigravity.videoplayer.mobile
 
 import android.Manifest
-import android.app.PictureInPictureParams
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
-import android.util.Rational
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -88,13 +86,4 @@ class MainActivity : ComponentActivity() {
             }
         }
     } 
-
-    override fun onUserLeaveHint() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val params = PictureInPictureParams.Builder()
-                .setAspectRatio(Rational(16, 9))
-                .build()
-            enterPictureInPictureMode(params)
-        }
-    }
 }
