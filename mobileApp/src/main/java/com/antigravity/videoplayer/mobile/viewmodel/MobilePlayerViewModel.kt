@@ -90,15 +90,19 @@ class MobilePlayerViewModel(application: Application) : AndroidViewModel(applica
     }
 
     fun adjustVolume(delta: Float) {
-        val maxVolume = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
-        val currentVolume = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)
-        val newVolume = (currentVolume + (delta * maxVolume)).toInt().coerceIn(0, maxVolume)
-        audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, newVolume, 0)
-        _volume.value = newVolume.toFloat() / maxVolume
+        val maxVolume = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC).toFloat()
+        if (maxVolume <= 0) return
+        
+        val currentVolumeFloat = _volume.value
+        val newVolumeFloat = (currentVolumeFloat + delta).coerceIn(0f, 1f)
+        _volume.value = newVolumeFloat
+        
+        val systemVolume = (newVolumeFloat * maxVolume).toInt()
+        audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, systemVolume, 0)
     }
 
-    fun adjustBrightness(newBrightness: Float) {
-        _brightness.value = newBrightness.coerceIn(0f, 1f)
+    fun adjustBrightness(delta: Float) {
+        _brightness.value = (_brightness.value + delta).coerceIn(0f, 1f)
     }
 
     fun toggleLock() {

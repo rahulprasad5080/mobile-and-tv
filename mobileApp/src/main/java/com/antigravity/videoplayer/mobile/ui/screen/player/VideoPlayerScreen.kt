@@ -7,6 +7,7 @@ import kotlin.OptIn
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.*
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
@@ -78,47 +79,64 @@ fun VideoPlayerScreen(
             .fillMaxSize()
             .background(Color.Black)
             .pointerInput(isLocked) {
-                if (!isLocked) {
-                    detectVerticalDragGestures(
-                        onDragEnd = { 
-                            scope.launch {
-                                delay(1000)
-                                activeGesture = null
-                                gestureInfo = null
-                                gestureIcon = null
+                if (isLocked) return@pointerInput
+                
+                var totalDragAmountVertical = 0f
+                var totalDragAmountHorizontal = 0f
+                var dragDirection: DragDirection? = null
+
+                detectDragGestures(
+                    onDragStart = {
+                        dragDirection = null
+                        totalDragAmountVertical = 0f
+                        totalDragAmountHorizontal = 0f
+                    },
+                    onDragEnd = {
+                        scope.launch {
+                            delay(1000)
+                            activeGesture = null
+                            gestureInfo = null
+                            gestureIcon = null
+                        }
+                    },
+                    onDragCancel = {
+                        activeGesture = null
+                        gestureInfo = null
+                        gestureIcon = null
+                    },
+                    onDrag = { change, dragAmount ->
+                        if (dragDirection == null) {
+                            totalDragAmountVertical += Math.abs(dragAmount.y)
+                            totalDragAmountHorizontal += Math.abs(dragAmount.x)
+                            
+                            if (totalDragAmountVertical > 20f) {
+                                dragDirection = DragDirection.VERTICAL
+                            } else if (totalDragAmountHorizontal > 20f) {
+                                dragDirection = DragDirection.HORIZONTAL
                             }
-                        },
-                        onVerticalDrag = { change, dragAmount ->
+                        }
+
+                        if (dragDirection == DragDirection.VERTICAL) {
                             val isLeftSide = change.position.x < size.width / 2
+                            val delta = -dragAmount.y / size.height
                             if (isLeftSide) {
                                 activeGesture = GestureType.BRIGHTNESS
-                                val newBrightness = (brightness - dragAmount / size.height).coerceIn(0f, 1f)
-                                viewModel.adjustBrightness(newBrightness)
+                                viewModel.adjustBrightness(delta)
                                 gestureIcon = Icons.Rounded.LightMode
                             } else {
                                 activeGesture = GestureType.VOLUME
-                                viewModel.adjustVolume(-dragAmount / size.height)
+                                viewModel.adjustVolume(delta)
                                 gestureIcon = Icons.Rounded.VolumeUp
                             }
-                        }
-                    )
-                }
-            }
-            .pointerInput(isLocked) {
-                if (!isLocked) {
-                    detectHorizontalDragGestures(
-                        onDragEnd = { 
-                            gestureInfo = null
-                            gestureIcon = null
-                        },
-                        onHorizontalDrag = { _, dragAmount ->
-                            val seekAmount = (dragAmount * 100).toLong()
+                        } else if (dragDirection == DragDirection.HORIZONTAL) {
+                            activeGesture = null // Ensure volume/brightness pills don't show
+                            val seekAmount = (dragAmount.x * 100).toLong()
                             viewModel.seekTo(currentPosition + seekAmount)
                             gestureInfo = formatTime(currentPosition)
                             gestureIcon = Icons.Rounded.FastForward
                         }
-                    )
-                }
+                    }
+                )
             }
             .pointerInput(isLocked) {
                 detectTapGestures(
@@ -135,7 +153,7 @@ fun VideoPlayerScreen(
                                 gestureIcon = Icons.Rounded.Forward10
                             }
                             scope.launch {
-                                delay(600)
+                                delay(800)
                                 gestureInfo = null
                                 gestureIcon = null
                             }
@@ -297,18 +315,18 @@ fun VideoPlayerScreen(
                     Box(modifier = Modifier.align(Alignment.Center)) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(40.dp)
+                            horizontalArrangement = Arrangement.spacedBy(28.dp)
                         ) {
                             IconButton(
                                 onClick = { viewModel.seekTo(currentPosition - 10000) },
-                                modifier = Modifier.size(56.dp).background(TransparentBlack, CircleShape)
+                                modifier = Modifier.size(52.dp).background(TransparentBlack, CircleShape)
                             ) {
-                                Icon(Icons.Rounded.Replay10, contentDescription = "Rewind", tint = Color.White, modifier = Modifier.size(32.dp))
+                                Icon(Icons.Rounded.Replay10, contentDescription = "Rewind", tint = Color.White, modifier = Modifier.size(28.dp))
                             }
 
                             Box(
                                 modifier = Modifier
-                                    .size(90.dp)
+                                    .size(76.dp)
                                     .clip(CircleShape)
                                     .background(PrimaryAccent.copy(alpha = 0.8f))
                                     .clickable { viewModel.togglePlayPause() },
@@ -318,15 +336,15 @@ fun VideoPlayerScreen(
                                     if (isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
                                     contentDescription = "Play/Pause",
                                     tint = Color.White,
-                                    modifier = Modifier.size(56.dp)
+                                    modifier = Modifier.size(44.dp)
                                 )
                             }
 
                             IconButton(
                                 onClick = { viewModel.seekTo(currentPosition + 10000) },
-                                modifier = Modifier.size(56.dp).background(TransparentBlack, CircleShape)
+                                modifier = Modifier.size(52.dp).background(TransparentBlack, CircleShape)
                             ) {
-                                Icon(Icons.Rounded.Forward10, contentDescription = "Fast Forward", tint = Color.White, modifier = Modifier.size(32.dp))
+                                Icon(Icons.Rounded.Forward10, contentDescription = "Fast Forward", tint = Color.White, modifier = Modifier.size(28.dp))
                             }
                         }
                     }
@@ -581,6 +599,7 @@ fun VerticalPillIndicator(
 }
 
 enum class GestureType { BRIGHTNESS, VOLUME }
+enum class DragDirection { HORIZONTAL, VERTICAL }
 
 fun formatTime(ms: Long): String {
     val totalSeconds = ms / 1000
