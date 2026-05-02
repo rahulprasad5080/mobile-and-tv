@@ -6,6 +6,8 @@ import android.content.pm.ActivityInfo
 import android.media.AudioManager
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.antigravity.videoplayer.core.model.AudioTrackInfo
+import com.antigravity.videoplayer.core.model.SubtitleTrackInfo
 import com.antigravity.videoplayer.core.model.VideoMediaItem
 import com.antigravity.videoplayer.core.player.PlayerManager
 import com.antigravity.videoplayer.core.repository.PlaybackProgressRepository
@@ -57,11 +59,26 @@ class MobilePlayerViewModel(application: Application) : AndroidViewModel(applica
     private val _isInPipMode = MutableStateFlow(false)
     val isInPipMode: StateFlow<Boolean> = _isInPipMode.asStateFlow()
 
+    val currentTracks = playerManager.currentTracks
+    
+    private val _audioTracks = MutableStateFlow<List<AudioTrackInfo>>(emptyList())
+    val audioTracks: StateFlow<List<AudioTrackInfo>> = _audioTracks.asStateFlow()
+    
+    private val _subtitleTracks = MutableStateFlow<List<SubtitleTrackInfo>>(emptyList())
+    val subtitleTracks: StateFlow<List<SubtitleTrackInfo>> = _subtitleTracks.asStateFlow()
+
     private var hideJob: Job? = null
 
     init {
         playerManager.initializePlayer()
         startProgressUpdate()
+        
+        viewModelScope.launch {
+            playerManager.currentTracks.collect {
+                _audioTracks.value = playerManager.getAudioTracks()
+                _subtitleTracks.value = playerManager.getSubtitleTracks()
+            }
+        }
         
         val maxVolume = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC).toFloat()
         val currentVolume = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC).toFloat()

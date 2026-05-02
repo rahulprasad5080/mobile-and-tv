@@ -66,19 +66,24 @@ fun VideoPlayerScreen(
     val playbackSpeed by viewModel.playbackSpeed.collectAsState()
     val resizeMode by viewModel.resizeMode.collectAsState()
 
+    val orientationMode by viewModel.orientationMode.collectAsState()
+    val isInPipMode by viewModel.isInPipMode.collectAsState()
+    val audioTracks by viewModel.audioTracks.collectAsState()
+    val subtitleTracks by viewModel.subtitleTracks.collectAsState()
+    
     var showSettings by remember { mutableStateOf(false) }
+    var showSubtitleDialog by remember { mutableStateOf(false) }
     var gestureInfo by remember { mutableStateOf<String?>(null) }
     var gestureIcon by remember { mutableStateOf<ImageVector?>(null) }
     var activeGesture by remember { mutableStateOf<GestureType?>(null) }
-    val orientationMode by viewModel.orientationMode.collectAsState()
-    val isInPipMode by viewModel.isInPipMode.collectAsState()
     
     val scope = rememberCoroutineScope()
 
     LaunchedEffect(brightness) {
-        (context as? Activity)?.window?.attributes?.let {
+        val activity = context as? Activity
+        activity?.window?.attributes?.let {
             it.screenBrightness = brightness
-            context.window.attributes = it
+            activity.window.attributes = it
         }
     }
 
@@ -347,6 +352,15 @@ fun VideoPlayerScreen(
                         }
                         IconButton(
                             onClick = { 
+                                showSubtitleDialog = true
+                                viewModel.resetHideTimer()
+                            },
+                            modifier = Modifier.background(TransparentBlack, CircleShape)
+                        ) {
+                            Icon(Icons.Rounded.Subtitles, contentDescription = "Subtitles", tint = Color.White)
+                        }
+                        IconButton(
+                            onClick = { 
                                 showSettings = true
                                 viewModel.resetHideTimer()
                             },
@@ -489,13 +503,24 @@ fun VideoPlayerScreen(
             onSpeedChange = { viewModel.setPlaybackSpeed(it) },
             resizeMode = resizeMode,
             onResizeModeChange = { viewModel.setResizeMode(it) },
-            audioTracks = viewModel.getAudioTracks(),
+            audioTracks = audioTracks,
             onAudioTrackSelect = { viewModel.selectAudioTrack(it) },
-            subtitleTracks = viewModel.getSubtitleTracks(),
+            subtitleTracks = subtitleTracks,
             onSubtitleTrackSelect = { viewModel.selectSubtitleTrack(it) },
             onRotateClick = { viewModel.toggleOrientation() },
             onSleepClick = { /* Sleep logic */ },
             onDismiss = { showSettings = false }
+        )
+    }
+
+    if (showSubtitleDialog && !isInPipMode) {
+        SubtitleSelectionDialog(
+            subtitleTracks = subtitleTracks,
+            onSubtitleTrackSelect = { 
+                viewModel.selectSubtitleTrack(it)
+                showSubtitleDialog = false
+            },
+            onDismiss = { showSubtitleDialog = false }
         )
     }
 }
@@ -691,6 +716,65 @@ fun SettingsToolButton(icon: ImageVector, label: String, onClick: () -> Unit) {
         Spacer(modifier = Modifier.width(8.dp))
         Text(label, fontSize = 12.sp)
     }
+}
+
+@Composable
+fun SubtitleSelectionDialog(
+    subtitleTracks: List<SubtitleTrackInfo>,
+    onSubtitleTrackSelect: (String?) -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = DeepBlack,
+        shape = RoundedCornerShape(28.dp),
+        title = { 
+            Text(
+                "Subtitles", 
+                color = Color.White, 
+                fontWeight = FontWeight.ExtraBold,
+                fontSize = 20.sp
+            ) 
+        },
+        text = {
+            Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                FilterChip(
+                    selected = subtitleTracks.none { it.isSelected },
+                    onClick = { onSubtitleTrackSelect(null) },
+                    label = { Text("None", color = if (subtitleTracks.none { it.isSelected }) Color.White else Color.Gray) },
+                    colors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = PrimaryAccent,
+                        containerColor = Color.White.copy(alpha = 0.05f)
+                    ),
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                    border = null
+                )
+                subtitleTracks.forEach { track ->
+                    FilterChip(
+                        selected = track.isSelected,
+                        onClick = { onSubtitleTrackSelect(track.id) },
+                        label = { 
+                            Text(
+                                track.label ?: track.language ?: "Unknown", 
+                                color = if (track.isSelected) Color.White else Color.Gray 
+                            ) 
+                        },
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = PrimaryAccent,
+                            containerColor = Color.White.copy(alpha = 0.05f)
+                        ),
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                        border = null
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { 
+                Text("Close", color = PrimaryAccent, fontWeight = FontWeight.Bold) 
+            }
+        }
+    )
 }
 
 @Composable
