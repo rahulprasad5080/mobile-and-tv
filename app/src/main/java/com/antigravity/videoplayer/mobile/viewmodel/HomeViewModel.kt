@@ -14,6 +14,7 @@ import android.os.Handler
 import android.os.Looper
 import android.provider.MediaStore
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -39,7 +40,9 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     val recentlyPlayed: StateFlow<List<VideoMediaItem>> = _recentlyPlayed.asStateFlow()
 
     private val _lastPlayedVideoId = MutableStateFlow<String?>(progressRepository.getLastPlayedVideoId())
+    private val _cachedLastPlayedVideo = MutableStateFlow(progressRepository.getLastPlayedVideo())
     private var loadVideosJob: Job? = null
+    private var refreshDebounceJob: Job? = null
     private var mediaObserver: ContentObserver? = null
 
     val videos: StateFlow<List<VideoMediaItem>> = combine(_videos, _searchQuery) { videos, query ->
@@ -54,8 +57,12 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         videoList.groupBy { it.folderName }
     }.stateIn(viewModelScope, SharingStarted.Lazily, emptyMap())
 
-    val lastPlayedVideo: StateFlow<VideoMediaItem?> = combine(_lastPlayedVideoId, _videos) { lastId, all ->
-        all.find { it.id == lastId }
+    val lastPlayedVideo: StateFlow<VideoMediaItem?> = combine(
+        _lastPlayedVideoId,
+        _videos,
+        _cachedLastPlayedVideo
+    ) { lastId, all, cached ->
+        all.find { it.id == lastId } ?: cached?.takeIf { it.id == lastId }
     }.stateIn(viewModelScope, SharingStarted.Lazily, null)
 
     fun loadVideos() {
@@ -63,7 +70,21 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         loadVideosJob = viewModelScope.launch {
             repository.getVideos(getApplication()).collect {
                 _videos.value = it
+                val lastId = _lastPlayedVideoId.value
+                val latestLastPlayed = it.find { video -> video.id == lastId }
+                if (latestLastPlayed != null) {
+                    _cachedLastPlayedVideo.value = latestLastPlayed
+                    progressRepository.saveLastPlayedVideo(latestLastPlayed)
+                }
             }
+        }
+    }
+
+    private fun refreshVideosSoon() {
+        refreshDebounceJob?.cancel()
+        refreshDebounceJob = viewModelScope.launch {
+            delay(300)
+            loadVideos()
         }
     }
 
@@ -72,7 +93,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
         mediaObserver = object : ContentObserver(Handler(Looper.getMainLooper())) {
             override fun onChange(selfChange: Boolean) {
-                loadVideos()
+                refreshVideosSoon()
             }
         }.also { observer ->
             getApplication<Application>().contentResolver.registerContentObserver(
@@ -89,6 +110,8 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
     fun addToRecentlyPlayed(video: VideoMediaItem) {
         _lastPlayedVideoId.value = video.id
+        _cachedLastPlayedVideo.value = video
+        progressRepository.saveLastPlayedVideo(video)
         val currentList = _recentlyPlayed.value.toMutableList()
         currentList.remove(video)
         currentList.add(0, video)

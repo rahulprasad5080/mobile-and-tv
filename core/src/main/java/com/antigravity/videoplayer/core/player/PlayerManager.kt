@@ -11,6 +11,7 @@ import androidx.media3.common.Player
 import androidx.media3.common.TrackSelectionOverride
 import androidx.media3.common.Tracks
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 import com.antigravity.videoplayer.core.model.AudioTrackInfo
@@ -26,6 +27,7 @@ class PlayerManager(private val context: Context) {
     companion object {
         @UnstableApi
         private var instance: ExoPlayer? = null
+        private var currentMediaId: String? = null
     }
 
     private val trackSelector = DefaultTrackSelector(context)
@@ -47,8 +49,19 @@ class PlayerManager(private val context: Context) {
     fun initializePlayer() {
         if (instance != null) return
 
+        val loadControl = DefaultLoadControl.Builder()
+            .setBufferDurationsMs(
+                2_500,
+                30_000,
+                750,
+                1_500
+            )
+            .setPrioritizeTimeOverSizeThresholds(true)
+            .build()
+
         instance = ExoPlayer.Builder(context)
             .setTrackSelector(trackSelector)
+            .setLoadControl(loadControl)
             .setAudioAttributes(
                 AudioAttributes.Builder()
                     .setUsage(C.USAGE_MEDIA)
@@ -83,7 +96,18 @@ class PlayerManager(private val context: Context) {
 
     fun playMedia(item: VideoMediaItem, startPositionMs: Long = 0) {
         initializePlayer()
+        val player = instance ?: return
+        val startPosition = startPositionMs.coerceAtLeast(0)
+
+        if (currentMediaId == item.id && player.mediaItemCount > 0) {
+            player.seekTo(startPosition)
+            player.playWhenReady = true
+            player.play()
+            return
+        }
+
         val mediaItem = MediaItem.Builder()
+            .setMediaId(item.id)
             .setUri(item.uri)
             .setMimeType(item.mimeType)
             .setMediaMetadata(
@@ -103,9 +127,42 @@ class PlayerManager(private val context: Context) {
             )
             .build()
 
-        instance?.setMediaItem(mediaItem, startPositionMs.coerceAtLeast(0))
-        instance?.prepare()
-        instance?.play()
+        currentMediaId = item.id
+        player.setMediaItem(mediaItem, startPosition)
+        player.prepare()
+        player.play()
+    }
+
+    fun preloadMedia(item: VideoMediaItem, startPositionMs: Long = 0) {
+        initializePlayer()
+        val player = instance ?: return
+        if (currentMediaId == item.id && player.mediaItemCount > 0) return
+
+        val mediaItem = MediaItem.Builder()
+            .setMediaId(item.id)
+            .setUri(item.uri)
+            .setMimeType(item.mimeType)
+            .setMediaMetadata(
+                MediaMetadata.Builder()
+                    .setTitle(item.title)
+                    .build()
+            )
+            .setSubtitleConfigurations(
+                item.subtitles.map {
+                    MediaItem.SubtitleConfiguration.Builder(it.uri)
+                        .setMimeType(it.mimeType)
+                        .setLanguage(it.language)
+                        .setLabel(it.label)
+                        .setSelectionFlags(C.SELECTION_FLAG_DEFAULT)
+                        .build()
+                }
+            )
+            .build()
+
+        currentMediaId = item.id
+        player.setMediaItem(mediaItem, startPositionMs.coerceAtLeast(0))
+        player.playWhenReady = false
+        player.prepare()
     }
 
     fun pause() {
@@ -128,6 +185,7 @@ class PlayerManager(private val context: Context) {
         instance?.clearMediaItems()
         instance?.release()
         instance = null
+        currentMediaId = null
     }
 
     // Track Selection Logic

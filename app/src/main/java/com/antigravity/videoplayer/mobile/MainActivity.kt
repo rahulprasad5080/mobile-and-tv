@@ -49,6 +49,7 @@ class MainActivity : ComponentActivity() {
     private val tvPlayerViewModel: TvPlayerViewModel by viewModels()
     private var hasStartedMobilePlayback = false
     private var hasStartedTvPlayback = false
+    private var skipNextStartRefresh = false
 
     private val intentSenderLauncher = registerForActivityResult(
         ActivityResultContracts.StartIntentSenderForResult()
@@ -116,6 +117,7 @@ class MainActivity : ComponentActivity() {
                     homeViewModel.startMediaStoreObserver()
                     homeViewModel.loadVideos()
                 }
+                skipNextStartRefresh = true
             }
             else -> {
                 requestPermissionLauncher.launch(videoPermission())
@@ -160,8 +162,15 @@ class MainActivity : ComponentActivity() {
 
         val navController = rememberNavController()
         val progressRepository = remember { PlaybackProgressRepository(this) }
+        val lastPlayedVideo by homeViewModel.lastPlayedVideo.collectAsState()
         
         var selectedFolderName by remember { mutableStateOf("") }
+
+        LaunchedEffect(lastPlayedVideo?.id) {
+            val video = lastPlayedVideo ?: return@LaunchedEffect
+            val progress = progressRepository.getProgress(video.id)
+            playerViewModel.preloadMedia(video, progress)
+        }
 
         NavHost(navController = navController, startDestination = "home") {
             composable("home") {
@@ -237,6 +246,10 @@ class MainActivity : ComponentActivity() {
     override fun onStart() {
         super.onStart()
         if (!hasVideoPermission()) return
+        if (skipNextStartRefresh) {
+            skipNextStartRefresh = false
+            return
+        }
 
         if (isTelevisionDevice()) {
             tvBrowseViewModel.startMediaStoreObserver()

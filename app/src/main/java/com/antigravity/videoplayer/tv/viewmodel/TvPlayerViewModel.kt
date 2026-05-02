@@ -57,6 +57,12 @@ class TvPlayerViewModel(application: Application) : AndroidViewModel(application
         playerManager.playMedia(item, startPositionMs)
     }
 
+    fun preloadMedia(item: VideoMediaItem, startPositionMs: Long = 0) {
+        releaseJob?.cancel()
+        _currentTitle.value = item.title
+        playerManager.preloadMedia(item, startPositionMs)
+    }
+
     fun togglePlayPause() {
         if (_isPlaying.value) {
             _isPlaying.value = false
@@ -82,7 +88,7 @@ class TvPlayerViewModel(application: Application) : AndroidViewModel(application
         playerManager.pause()
         releaseJob?.cancel()
         releaseJob = viewModelScope.launch {
-            delay(150)
+            delay(30_000)
             playerManager.releasePlayer()
         }
     }
