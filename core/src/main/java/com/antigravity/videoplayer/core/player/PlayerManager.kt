@@ -131,13 +131,14 @@ class PlayerManager(private val context: Context) {
         val tracks = _currentTracks.value ?: return emptyList()
         val audioTracks = mutableListOf<AudioTrackInfo>()
         
-        for (group in tracks.groups) {
+        for (groupIndex in 0 until tracks.groups.size) {
+            val group = tracks.groups[groupIndex]
             if (group.type == C.TRACK_TYPE_AUDIO) {
                 for (i in 0 until group.length) {
                     val format = group.getTrackFormat(i)
                     audioTracks.add(
                         AudioTrackInfo(
-                            id = format.id ?: i.toString(),
+                            id = "audio_${groupIndex}_$i",
                             language = format.language,
                             label = format.label,
                             bitRate = format.bitrate,
@@ -154,13 +155,14 @@ class PlayerManager(private val context: Context) {
         val tracks = _currentTracks.value ?: return emptyList()
         val subtitleTracks = mutableListOf<SubtitleTrackInfo>()
 
-        for (group in tracks.groups) {
+        for (groupIndex in 0 until tracks.groups.size) {
+            val group = tracks.groups[groupIndex]
             if (group.type == C.TRACK_TYPE_TEXT) {
                 for (i in 0 until group.length) {
                     val format = group.getTrackFormat(i)
                     subtitleTracks.add(
                         SubtitleTrackInfo(
-                            id = format.id ?: i.toString(),
+                            id = "subtitle_${groupIndex}_$i",
                             language = format.language,
                             label = format.label,
                             isSelected = group.isTrackSelected(i)
@@ -174,17 +176,18 @@ class PlayerManager(private val context: Context) {
 
     fun selectAudioTrack(trackId: String) {
         val tracks = _currentTracks.value ?: return
-        for (group in tracks.groups) {
-            if (group.type == C.TRACK_TYPE_AUDIO) {
-                for (i in 0 until group.length) {
-                    val format = group.getTrackFormat(i)
-                    if (format.id == trackId) {
-                        trackSelector.parameters = trackSelector.buildUponParameters()
-                            .setOverrideForType(TrackSelectionOverride(group.mediaTrackGroup, i))
-                            .build()
-                        return
-                    }
-                }
+        val parts = trackId.split("_")
+        if (parts.size < 3) return
+        
+        val groupIndex = parts[1].toIntOrNull() ?: return
+        val trackIndex = parts[2].toIntOrNull() ?: return
+        
+        if (groupIndex < tracks.groups.size) {
+            val group = tracks.groups[groupIndex]
+            if (trackIndex < group.length) {
+                trackSelector.parameters = trackSelector.buildUponParameters()
+                    .setOverrideForType(TrackSelectionOverride(group.mediaTrackGroup, trackIndex))
+                    .build()
             }
         }
     }
@@ -198,21 +201,19 @@ class PlayerManager(private val context: Context) {
         }
 
         val tracks = _currentTracks.value ?: return
-        trackSelector.parameters = trackSelector.buildUponParameters()
-            .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
-            .build()
+        val parts = trackId.split("_")
+        if (parts.size < 3) return
 
-        for (group in tracks.groups) {
-            if (group.type == C.TRACK_TYPE_TEXT) {
-                for (i in 0 until group.length) {
-                    val format = group.getTrackFormat(i)
-                    if (format.id == trackId) {
-                        trackSelector.parameters = trackSelector.buildUponParameters()
-                            .setOverrideForType(TrackSelectionOverride(group.mediaTrackGroup, i))
-                            .build()
-                        return
-                    }
-                }
+        val groupIndex = parts[1].toIntOrNull() ?: return
+        val trackIndex = parts[2].toIntOrNull() ?: return
+
+        if (groupIndex < tracks.groups.size) {
+            val group = tracks.groups[groupIndex]
+            if (trackIndex < group.length) {
+                trackSelector.parameters = trackSelector.buildUponParameters()
+                    .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
+                    .setOverrideForType(TrackSelectionOverride(group.mediaTrackGroup, trackIndex))
+                    .build()
             }
         }
     }
