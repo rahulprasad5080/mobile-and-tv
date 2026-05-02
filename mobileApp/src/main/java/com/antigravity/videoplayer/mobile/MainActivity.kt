@@ -31,6 +31,9 @@ import androidx.core.view.WindowInsetsControllerCompat
 import android.view.WindowManager
 import android.app.PictureInPictureParams
 import android.content.res.Configuration
+import android.app.Activity
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalConfiguration
 
 
 
@@ -64,8 +67,6 @@ class MainActivity : ComponentActivity() {
         
         WindowCompat.setDecorFitsSystemWindows(window, false)
         val controller = WindowCompat.getInsetsController(window, window.decorView)
-        controller.hide(WindowInsetsCompat.Type.systemBars())
-        controller.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
             window.attributes.layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
@@ -106,6 +107,21 @@ class MainActivity : ComponentActivity() {
 
     @Composable
     fun AppNavigation() {
+        val context = LocalContext.current
+        val configuration = LocalConfiguration.current
+        val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+        
+        LaunchedEffect(isLandscape) {
+            val window = (context as? Activity)?.window ?: return@LaunchedEffect
+            val controller = WindowCompat.getInsetsController(window, window.decorView)
+            if (isLandscape) {
+                controller.hide(WindowInsetsCompat.Type.systemBars())
+                controller.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            } else {
+                controller.show(WindowInsetsCompat.Type.systemBars())
+            }
+        }
+
         val navController = rememberNavController()
         val progressRepository = remember { PlaybackProgressRepository(this) }
         

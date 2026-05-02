@@ -102,6 +102,7 @@ fun VideoPlayerScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
+            .systemBarsPadding()
             .background(Color.Black)
             .pointerInput(isLocked, isInPipMode) {
                 if (isLocked || isInPipMode) return@pointerInput

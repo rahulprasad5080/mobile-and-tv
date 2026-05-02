@@ -44,7 +44,6 @@ fun HomeScreen(
 
     Scaffold(
         containerColor = DarkBackground,
-        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
             TopAppBar(
                 title = {
