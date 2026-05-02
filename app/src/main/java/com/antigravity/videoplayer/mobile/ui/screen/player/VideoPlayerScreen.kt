@@ -41,6 +41,8 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.ui.PlayerView
 import com.antigravity.videoplayer.core.model.AudioTrackInfo
 import com.antigravity.videoplayer.core.model.SubtitleTrackInfo
+import com.antigravity.videoplayer.common.ui.player.SubtitleSize
+import com.antigravity.videoplayer.common.ui.player.applyNetflixSubtitleStyle
 import com.antigravity.videoplayer.mobile.viewmodel.MobilePlayerViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -75,6 +77,7 @@ fun VideoPlayerScreen(
     
     var showSettings by remember { mutableStateOf(false) }
     var showSubtitleDialog by remember { mutableStateOf(false) }
+    var subtitleSize by remember { mutableStateOf(SubtitleSize.Medium) }
     var gestureInfo by remember { mutableStateOf<String?>(null) }
     var gestureIcon by remember { mutableStateOf<ImageVector?>(null) }
     var activeGesture by remember { mutableStateOf<GestureType?>(null) }
@@ -201,6 +204,7 @@ fun VideoPlayerScreen(
                 PlayerView(ctx).apply {
                     this.player = player
                     useController = false
+                    applyNetflixSubtitleStyle(subtitleSize, isTv = false)
                     layoutParams = FrameLayout.LayoutParams(
                         ViewGroup.LayoutParams.MATCH_PARENT,
                         ViewGroup.LayoutParams.MATCH_PARENT
@@ -210,6 +214,7 @@ fun VideoPlayerScreen(
             update = { view ->
                 view.player = player
                 view.resizeMode = resizeMode
+                view.applyNetflixSubtitleStyle(subtitleSize, isTv = false)
             },
         )
         
@@ -521,6 +526,8 @@ fun VideoPlayerScreen(
     if (showSubtitleDialog && !isInPipMode) {
         SubtitleSelectionDialog(
             subtitleTracks = subtitleTracks,
+            selectedSize = subtitleSize,
+            onSubtitleSizeChange = { subtitleSize = it },
             onSubtitleTrackSelect = { 
                 viewModel.selectSubtitleTrack(it)
                 showSubtitleDialog = false
@@ -752,6 +759,8 @@ fun SettingsChip(selected: Boolean, label: String, onClick: () -> Unit) {
 @Composable
 fun SubtitleSelectionDialog(
     subtitleTracks: List<SubtitleTrackInfo>,
+    selectedSize: SubtitleSize,
+    onSubtitleSizeChange: (SubtitleSize) -> Unit,
     onSubtitleTrackSelect: (String?) -> Unit,
     onDismiss: () -> Unit
 ) {
@@ -769,10 +778,34 @@ fun SubtitleSelectionDialog(
         },
         text = {
             Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                Text(
+                    "Style",
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    SubtitleSize.entries.forEach { size ->
+                        SettingsChip(
+                            selected = selectedSize == size,
+                            label = size.name,
+                            onClick = { onSubtitleSizeChange(size) }
+                        )
+                    }
+                }
+
+                HorizontalDivider(color = Color.White.copy(alpha = 0.12f), modifier = Modifier.padding(vertical = 16.dp))
+
+                Text(
+                    "Language",
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
                 FilterChip(
                     selected = subtitleTracks.none { it.isSelected },
                     onClick = { onSubtitleTrackSelect(null) },
-                    label = { Text("None", color = if (subtitleTracks.none { it.isSelected }) Color.White else Color.Gray) },
+                    label = { Text("Off", color = if (subtitleTracks.none { it.isSelected }) Color.White else Color.Gray) },
                     colors = FilterChipDefaults.filterChipColors(
                         selectedContainerColor = PrimaryAccent,
                         containerColor = Color.White.copy(alpha = 0.05f)

@@ -35,6 +35,8 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import com.antigravity.videoplayer.common.ui.player.SubtitleSize
+import com.antigravity.videoplayer.common.ui.player.applyNetflixSubtitleStyle
 import com.antigravity.videoplayer.core.model.AudioTrackInfo
 import com.antigravity.videoplayer.core.model.SubtitleTrackInfo
 import com.antigravity.videoplayer.tv.viewmodel.TvPlayerViewModel
@@ -50,6 +52,7 @@ fun TvPlayerScreen(
     val duration by viewModel.duration.collectAsState()
     val currentTitle by viewModel.currentTitle.collectAsState()
     var showTrackSelection by remember { mutableStateOf(false) }
+    var subtitleSize by remember { mutableStateOf(SubtitleSize.Medium) }
 
     Box(
         modifier = Modifier
@@ -83,11 +86,16 @@ fun TvPlayerScreen(
                 PlayerView(it).apply {
                     this.player = player
                     useController = false
+                    applyNetflixSubtitleStyle(subtitleSize, isTv = true)
                     layoutParams = FrameLayout.LayoutParams(
                         ViewGroup.LayoutParams.MATCH_PARENT,
                         ViewGroup.LayoutParams.MATCH_PARENT
                     )
                 }
+            },
+            update = { view ->
+                view.player = player
+                view.applyNetflixSubtitleStyle(subtitleSize, isTv = true)
             },
             modifier = Modifier.fillMaxSize()
         )
@@ -156,8 +164,10 @@ fun TvPlayerScreen(
             onDismiss = { showTrackSelection = false },
             audioTracks = viewModel.playerManager.getAudioTracks(),
             subtitleTracks = viewModel.playerManager.getSubtitleTracks(),
+            selectedSubtitleSize = subtitleSize,
             onAudioSelect = { viewModel.playerManager.selectAudioTrack(it) },
-            onSubtitleSelect = { viewModel.playerManager.selectSubtitleTrack(it) }
+            onSubtitleSelect = { viewModel.playerManager.selectSubtitleTrack(it) },
+            onSubtitleSizeChange = { subtitleSize = it }
         )
     }
 }
@@ -167,8 +177,10 @@ private fun TrackSelectionDialog(
     onDismiss: () -> Unit,
     audioTracks: List<AudioTrackInfo>,
     subtitleTracks: List<SubtitleTrackInfo>,
+    selectedSubtitleSize: SubtitleSize,
     onAudioSelect: (String) -> Unit,
-    onSubtitleSelect: (String?) -> Unit
+    onSubtitleSelect: (String?) -> Unit,
+    onSubtitleSizeChange: (SubtitleSize) -> Unit
 ) {
     Box(
         modifier = Modifier
@@ -190,6 +202,17 @@ private fun TrackSelectionDialog(
                 audioTracks.forEach { track ->
                     Button(onClick = { onAudioSelect(track.id) }) {
                         Text(text = listOfNotNull(track.language, track.label).joinToString(" - ").ifBlank { "Unknown" })
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(18.dp))
+
+                Text(text = "Subtitle Size", style = MaterialTheme.typography.titleMedium)
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    SubtitleSize.entries.forEach { size ->
+                        Button(onClick = { onSubtitleSizeChange(size) }) {
+                            Text(if (selectedSubtitleSize == size) "${size.name} On" else size.name)
+                        }
                     }
                 }
 
