@@ -177,8 +177,27 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onStop() {
+        super.onStop()
+        // Stop playback if we are not in PiP mode, or if the activity is finishing (e.g. PiP closed)
+        if (!isInPictureInPictureMode || isFinishing) {
+            playerViewModel.stopPlayback()
+        }
+    }
+
     override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean, newConfig: Configuration) {
         super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
         playerViewModel.setPipMode(isInPictureInPictureMode)
+        
+        // If we are exiting PiP mode (either returning to app or closing PiP)
+        // we stop playback to ensure no ghost audio remains.
+        if (!isInPictureInPictureMode) {
+            playerViewModel.stopPlayback()
+        }
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        playerViewModel.stopPlayback()
     }
 }

@@ -24,7 +24,11 @@ import kotlinx.coroutines.flow.asStateFlow
 @OptIn(UnstableApi::class)
 class PlayerManager(private val context: Context) {
 
-    private var exoPlayer: ExoPlayer? = null
+    companion object {
+        @UnstableApi
+        private var instance: ExoPlayer? = null
+    }
+
     private val trackSelector = DefaultTrackSelector(context)
 
     private val _playbackState = MutableStateFlow<PlaybackState>(PlaybackState.Idle)
@@ -42,9 +46,9 @@ class PlayerManager(private val context: Context) {
     }
 
     fun initializePlayer() {
-        if (exoPlayer != null) return
+        if (instance != null) return
 
-        exoPlayer = ExoPlayer.Builder(context)
+        instance = ExoPlayer.Builder(context)
             .setTrackSelector(trackSelector)
             .setAudioAttributes(
                 AudioAttributes.Builder()
@@ -76,9 +80,10 @@ class PlayerManager(private val context: Context) {
             }
     }
 
-    fun getPlayer(): Player? = exoPlayer
+    fun getPlayer(): Player? = instance
 
     fun playMedia(item: VideoMediaItem, startPositionMs: Long = 0) {
+        initializePlayer()
         val mediaItem = MediaItem.Builder()
             .setUri(item.uri)
             .setMimeType(item.mimeType)
@@ -99,31 +104,33 @@ class PlayerManager(private val context: Context) {
             )
             .build()
 
-        exoPlayer?.setMediaItem(mediaItem)
+        instance?.setMediaItem(mediaItem)
         if (startPositionMs > 0) {
-            exoPlayer?.seekTo(startPositionMs)
+            instance?.seekTo(startPositionMs)
         }
-        exoPlayer?.prepare()
+        instance?.prepare()
     }
 
     fun pause() {
-        exoPlayer?.pause()
+        instance?.pause()
     }
 
     fun resume() {
-        if (exoPlayer?.playbackState == Player.STATE_ENDED) {
-            exoPlayer?.seekTo(0)
+        if (instance?.playbackState == Player.STATE_ENDED) {
+            instance?.seekTo(0)
         }
-        exoPlayer?.play()
+        instance?.play()
     }
 
     fun seekTo(positionMs: Long) {
-        exoPlayer?.seekTo(positionMs)
+        instance?.seekTo(positionMs)
     }
 
     fun releasePlayer() {
-        exoPlayer?.release()
-        exoPlayer = null
+        instance?.stop()
+        instance?.clearMediaItems()
+        instance?.release()
+        instance = null
     }
 
     // Track Selection Logic
