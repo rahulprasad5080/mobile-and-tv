@@ -2,6 +2,7 @@ package com.antigravity.videoplayer.mobile.ui.screen.player
 
 import android.app.Activity
 import android.content.pm.ActivityInfo
+import android.content.res.Configuration
 import android.view.ViewGroup
 import android.widget.FrameLayout
 import androidx.core.view.WindowCompat
@@ -559,164 +560,195 @@ fun AdvancedSettingsDialog(
     onSleepClick: () -> Unit,
     onDismiss: () -> Unit
 ) {
+    val configuration = androidx.compose.ui.platform.LocalConfiguration.current
+    val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = DeepBlack,
-        shape = RoundedCornerShape(28.dp),
+        shape = RoundedCornerShape(24.dp),
+        tonalElevation = 8.dp,
+        modifier = Modifier.fillMaxWidth(if (isLandscape) 0.9f else 1f),
         title = { 
-            Text(
-                "Playback Settings", 
-                color = Color.White, 
-                fontWeight = FontWeight.ExtraBold,
-                fontSize = 20.sp
-            ) 
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Rounded.Settings, contentDescription = null, tint = PrimaryAccent, modifier = Modifier.size(24.dp))
+                Spacer(modifier = Modifier.width(12.dp))
+                Text(
+                    "Playback Settings", 
+                    color = Color.White, 
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 20.sp
+                )
+            }
         },
         text = {
-            Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+            if (isLandscape) {
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 300.dp) // Prevent it from being too tall on some devices
+                        .verticalScroll(rememberScrollState())
                 ) {
-                    Text("Playback Speed", color = PrimaryAccent, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-                    Text(
-                        text = "${"%.2f".format(currentSpeed)}x",
-                        color = Color.White,
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier
-                            .background(PrimaryAccent.copy(alpha = 0.2f), RoundedCornerShape(8.dp))
-                            .padding(horizontal = 8.dp, vertical = 4.dp)
-                    )
-                }
-                Spacer(modifier = Modifier.height(12.dp))
-                Slider(
-                    value = currentSpeed,
-                    onValueChange = { onSpeedChange(it) },
-                    valueRange = 0.25f..3.0f,
-                    colors = SliderDefaults.colors(
-                        thumbColor = PrimaryAccent,
-                        activeTrackColor = PrimaryAccent,
-                        inactiveTrackColor = Color.White.copy(alpha = 0.1f)
-                    ),
-                    modifier = Modifier.fillMaxWidth()
-                )
-                
-                Spacer(modifier = Modifier.height(24.dp))
-
-                Text("Aspect Ratio", color = PrimaryAccent, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-                Spacer(modifier = Modifier.height(12.dp))
-                val modes = listOf(0 to "Fit", 3 to "Fill", 4 to "Zoom")
-                FlowRow(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    modes.forEach { (mode, label) ->
-                        FilterChip(
-                            selected = resizeMode == mode,
-                            onClick = { onResizeModeChange(mode) },
-                            label = { Text(label, color = if (resizeMode == mode) Color.White else Color.Gray) },
-                            colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = PrimaryAccent,
-                                containerColor = Color.White.copy(alpha = 0.05f)
-                            ),
-                            border = null
-                        )
+                    Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
+                        TracksSection(audioTracks, onAudioTrackSelect, subtitleTracks, onSubtitleTrackSelect)
+                    }
+                    Column(modifier = Modifier.weight(1f).padding(start = 12.dp)) {
+                        PlaybackSection(currentSpeed, onSpeedChange)
+                        Spacer(modifier = Modifier.height(20.dp))
+                        DisplaySection(resizeMode, onResizeModeChange)
                     }
                 }
-                
-                Spacer(modifier = Modifier.height(24.dp))
-                
-                Spacer(modifier = Modifier.height(24.dp))
-
-                if (audioTracks.isNotEmpty()) {
-                    Text("Audio Track", color = PrimaryAccent, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-                    Spacer(modifier = Modifier.height(12.dp))
-                    FlowRow(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        audioTracks.forEach { track ->
-                            FilterChip(
-                                selected = track.isSelected,
-                                onClick = { onAudioTrackSelect(track.id) },
-                                label = { Text(track.label ?: track.language ?: "Unknown", color = if (track.isSelected) Color.White else Color.Gray) },
-                                colors = FilterChipDefaults.filterChipColors(
-                                    selectedContainerColor = PrimaryAccent,
-                                    containerColor = Color.White.copy(alpha = 0.05f)
-                                ),
-                                border = null
-                            )
-                        }
-                    }
-                    Spacer(modifier = Modifier.height(24.dp))
-                }
-
-                if (subtitleTracks.isNotEmpty() || true) { // Always show subtitle section to allow disabling
-                    Text("Subtitles", color = PrimaryAccent, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-                    Spacer(modifier = Modifier.height(12.dp))
-                    FlowRow(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        FilterChip(
-                            selected = subtitleTracks.none { it.isSelected },
-                            onClick = { onSubtitleTrackSelect(null) },
-                            label = { Text("None", color = if (subtitleTracks.none { it.isSelected }) Color.White else Color.Gray) },
-                            colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = PrimaryAccent,
-                                containerColor = Color.White.copy(alpha = 0.05f)
-                            ),
-                            border = null
-                        )
-                        subtitleTracks.forEach { track ->
-                            FilterChip(
-                                selected = track.isSelected,
-                                onClick = { onSubtitleTrackSelect(track.id) },
-                                label = { Text(track.label ?: track.language ?: "Unknown", color = if (track.isSelected) Color.White else Color.Gray) },
-                                colors = FilterChipDefaults.filterChipColors(
-                                    selectedContainerColor = PrimaryAccent,
-                                    containerColor = Color.White.copy(alpha = 0.05f)
-                                ),
-                                border = null
-                            )
-                        }
-                    }
-                    Spacer(modifier = Modifier.height(24.dp))
-                }
-
-                Text("Video Tools", color = PrimaryAccent, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-                Spacer(modifier = Modifier.height(12.dp))
-                FlowRow(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    SettingsToolButton(Icons.Rounded.Timer, "Sleep", onSleepClick)
-                    SettingsToolButton(Icons.Rounded.ScreenRotation, "Rotate", onRotateClick)
+            } else {
+                Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                    TracksSection(audioTracks, onAudioTrackSelect, subtitleTracks, onSubtitleTrackSelect)
+                    HorizontalDivider(color = Color.White.copy(alpha = 0.1f), modifier = Modifier.padding(vertical = 16.dp))
+                    PlaybackSection(currentSpeed, onSpeedChange)
+                    HorizontalDivider(color = Color.White.copy(alpha = 0.1f), modifier = Modifier.padding(vertical = 16.dp))
+                    DisplaySection(resizeMode, onResizeModeChange)
                 }
             }
         },
         confirmButton = {
-            TextButton(onClick = onDismiss) { 
-                Text("Done", color = PrimaryAccent, fontWeight = FontWeight.Bold) 
+            TextButton(
+                onClick = onDismiss,
+                colors = ButtonDefaults.textButtonColors(contentColor = PrimaryAccent)
+            ) { 
+                Text("Done", fontWeight = FontWeight.Bold) 
             }
         }
     )
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun SettingsToolButton(icon: ImageVector, label: String, onClick: () -> Unit) {
-    Button(
-        onClick = onClick,
-        colors = ButtonDefaults.buttonColors(containerColor = Color.White.copy(alpha = 0.1f)),
-        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
-        modifier = Modifier.height(40.dp)
-    ) { 
-        Icon(icon, contentDescription = null, modifier = Modifier.size(18.dp))
-        Spacer(modifier = Modifier.width(8.dp))
-        Text(label, fontSize = 12.sp)
+fun TracksSection(
+    audioTracks: List<AudioTrackInfo>,
+    onAudioTrackSelect: (String) -> Unit,
+    subtitleTracks: List<SubtitleTrackInfo>,
+    onSubtitleTrackSelect: (String?) -> Unit
+) {
+    if (audioTracks.isNotEmpty() || subtitleTracks.isNotEmpty()) {
+        SettingsSectionHeader(Icons.Rounded.AudioFile, "Tracks")
+        
+        if (audioTracks.isNotEmpty()) {
+            Text("Audio", color = Color.Gray, style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(top = 8.dp))
+            FlowRow(
+                modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                audioTracks.forEach { track ->
+                    SettingsChip(
+                        selected = track.isSelected,
+                        label = track.label ?: track.language ?: "Unknown",
+                        onClick = { onAudioTrackSelect(track.id) }
+                    )
+                }
+            }
+        }
+
+        if (subtitleTracks.isNotEmpty() || true) {
+            Text("Subtitles", color = Color.Gray, style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(top = 8.dp))
+            FlowRow(
+                modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                SettingsChip(
+                    selected = subtitleTracks.none { it.isSelected },
+                    label = "None",
+                    onClick = { onSubtitleTrackSelect(null) }
+                )
+                subtitleTracks.forEach { track ->
+                    SettingsChip(
+                        selected = track.isSelected,
+                        label = track.label ?: track.language ?: "Unknown",
+                        onClick = { onSubtitleTrackSelect(track.id) }
+                    )
+                }
+            }
+        }
     }
+}
+
+@Composable
+fun PlaybackSection(currentSpeed: Float, onSpeedChange: (Float) -> Unit) {
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+        SettingsSectionHeader(Icons.Rounded.Speed, "Speed")
+        Spacer(modifier = Modifier.weight(1f))
+        SettingsChip(
+            selected = currentSpeed == 1.0f,
+            label = "Normal",
+            onClick = { onSpeedChange(1.0f) }
+        )
+    }
+    Spacer(modifier = Modifier.height(12.dp))
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Slider(
+            value = currentSpeed,
+            onValueChange = { onSpeedChange(it) },
+            valueRange = 0.25f..3.0f,
+            colors = SliderDefaults.colors(
+                thumbColor = PrimaryAccent,
+                activeTrackColor = PrimaryAccent,
+                inactiveTrackColor = Color.White.copy(alpha = 0.1f)
+            ),
+            modifier = Modifier.weight(1f)
+        )
+        Spacer(modifier = Modifier.width(12.dp))
+        Text(
+            text = "${"%.2f".format(currentSpeed)}x",
+            color = Color.White,
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier
+                .background(PrimaryAccent.copy(alpha = 0.2f), RoundedCornerShape(8.dp))
+                .padding(horizontal = 8.dp, vertical = 4.dp)
+        )
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+fun DisplaySection(resizeMode: Int, onResizeModeChange: (Int) -> Unit) {
+    SettingsSectionHeader(Icons.Rounded.AspectRatio, "Aspect Ratio")
+    Spacer(modifier = Modifier.height(12.dp))
+    val modes = listOf(0 to "Fit", 3 to "Fill", 4 to "Zoom")
+    FlowRow(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        modes.forEach { (mode, label) ->
+            SettingsChip(
+                selected = resizeMode == mode,
+                label = label,
+                onClick = { onResizeModeChange(mode) }
+            )
+        }
+    }
+}
+
+@Composable
+fun SettingsSectionHeader(icon: ImageVector, title: String) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Icon(icon, contentDescription = null, tint = PrimaryAccent, modifier = Modifier.size(18.dp))
+        Spacer(modifier = Modifier.width(8.dp))
+        Text(title, color = Color.White, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun SettingsChip(selected: Boolean, label: String, onClick: () -> Unit) {
+    FilterChip(
+        selected = selected,
+        onClick = onClick,
+        label = { Text(label, color = if (selected) Color.White else Color.Gray) },
+        colors = FilterChipDefaults.filterChipColors(
+            selectedContainerColor = PrimaryAccent,
+            containerColor = Color.White.copy(alpha = 0.05f)
+        ),
+        border = null,
+        shape = RoundedCornerShape(12.dp)
+    )
 }
 
 @Composable
