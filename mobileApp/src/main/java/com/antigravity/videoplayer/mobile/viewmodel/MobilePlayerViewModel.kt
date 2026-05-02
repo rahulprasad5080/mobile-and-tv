@@ -152,6 +152,11 @@ class MobilePlayerViewModel(application: Application) : AndroidViewModel(applica
         }
     }
 
+    fun getAudioTracks() = playerManager.getAudioTracks()
+    fun getSubtitleTracks() = playerManager.getSubtitleTracks()
+    fun selectAudioTrack(id: String) = playerManager.selectAudioTrack(id)
+    fun selectSubtitleTrack(id: String?) = playerManager.selectSubtitleTrack(id)
+
     fun stopPlayback() {
         currentVideo?.let {
             progressRepository.saveProgress(it.id, playerManager.getPlayer()?.currentPosition ?: 0L)

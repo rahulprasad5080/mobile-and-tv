@@ -37,6 +37,8 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.ui.PlayerView
+import com.antigravity.videoplayer.core.model.AudioTrackInfo
+import com.antigravity.videoplayer.core.model.SubtitleTrackInfo
 import com.antigravity.videoplayer.mobile.viewmodel.MobilePlayerViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -484,6 +486,10 @@ fun VideoPlayerScreen(
             onSpeedChange = { viewModel.setPlaybackSpeed(it) },
             resizeMode = resizeMode,
             onResizeModeChange = { viewModel.setResizeMode(it) },
+            audioTracks = viewModel.getAudioTracks(),
+            onAudioTrackSelect = { viewModel.selectAudioTrack(it) },
+            subtitleTracks = viewModel.getSubtitleTracks(),
+            onSubtitleTrackSelect = { viewModel.selectSubtitleTrack(it) },
             onRotateClick = { viewModel.toggleOrientation() },
             onSleepClick = { /* Sleep logic */ },
             onDismiss = { showSettings = false }
@@ -516,6 +522,10 @@ fun AdvancedSettingsDialog(
     onSpeedChange: (Float) -> Unit,
     resizeMode: Int,
     onResizeModeChange: (Int) -> Unit,
+    audioTracks: List<AudioTrackInfo>,
+    onAudioTrackSelect: (String) -> Unit,
+    subtitleTracks: List<SubtitleTrackInfo>,
+    onSubtitleTrackSelect: (String?) -> Unit,
     onRotateClick: () -> Unit,
     onSleepClick: () -> Unit,
     onDismiss: () -> Unit
@@ -588,6 +598,64 @@ fun AdvancedSettingsDialog(
                 
                 Spacer(modifier = Modifier.height(24.dp))
                 
+                Spacer(modifier = Modifier.height(24.dp))
+
+                if (audioTracks.isNotEmpty()) {
+                    Text("Audio Track", color = PrimaryAccent, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                    Spacer(modifier = Modifier.height(12.dp))
+                    FlowRow(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        audioTracks.forEach { track ->
+                            FilterChip(
+                                selected = track.isSelected,
+                                onClick = { onAudioTrackSelect(track.id) },
+                                label = { Text(track.label ?: track.language ?: "Unknown", color = if (track.isSelected) Color.White else Color.Gray) },
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = PrimaryAccent,
+                                    containerColor = Color.White.copy(alpha = 0.05f)
+                                ),
+                                border = null
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(24.dp))
+                }
+
+                if (subtitleTracks.isNotEmpty() || true) { // Always show subtitle section to allow disabling
+                    Text("Subtitles", color = PrimaryAccent, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                    Spacer(modifier = Modifier.height(12.dp))
+                    FlowRow(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        FilterChip(
+                            selected = subtitleTracks.none { it.isSelected },
+                            onClick = { onSubtitleTrackSelect(null) },
+                            label = { Text("None", color = if (subtitleTracks.none { it.isSelected }) Color.White else Color.Gray) },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = PrimaryAccent,
+                                containerColor = Color.White.copy(alpha = 0.05f)
+                            ),
+                            border = null
+                        )
+                        subtitleTracks.forEach { track ->
+                            FilterChip(
+                                selected = track.isSelected,
+                                onClick = { onSubtitleTrackSelect(track.id) },
+                                label = { Text(track.label ?: track.language ?: "Unknown", color = if (track.isSelected) Color.White else Color.Gray) },
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = PrimaryAccent,
+                                    containerColor = Color.White.copy(alpha = 0.05f)
+                                ),
+                                border = null
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(24.dp))
+                }
+
                 Text("Video Tools", color = PrimaryAccent, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
                 Spacer(modifier = Modifier.height(12.dp))
                 FlowRow(
