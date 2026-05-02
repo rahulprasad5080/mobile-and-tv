@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.antigravity.videoplayer.core.model.VideoMediaItem
 import com.antigravity.videoplayer.core.repository.VideoFileRepository
 import com.antigravity.videoplayer.core.repository.VideoRepository
+import com.antigravity.videoplayer.core.repository.PlaybackProgressRepository
 import android.content.IntentSender
 import android.net.Uri
 import kotlinx.coroutines.flow.MutableStateFlow

@@ -53,7 +53,7 @@ class MobilePlayerViewModel(application: Application) : AndroidViewModel(applica
     private val _resizeMode = MutableStateFlow(0) // 0: Fit, 3: Fill, 4: Zoom
     val resizeMode: StateFlow<Int> = _resizeMode.asStateFlow()
 
-    private val _orientationMode = MutableStateFlow(ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE)
+    private val _orientationMode = MutableStateFlow(ActivityInfo.SCREEN_ORIENTATION_SENSOR)
     val orientationMode: StateFlow<Int> = _orientationMode.asStateFlow()
     
     private val _isInPipMode = MutableStateFlow(false)
@@ -166,9 +166,9 @@ class MobilePlayerViewModel(application: Application) : AndroidViewModel(applica
 
     fun toggleOrientation() {
         _orientationMode.value = when (_orientationMode.value) {
+            ActivityInfo.SCREEN_ORIENTATION_SENSOR -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
             ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE -> ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
-            ActivityInfo.SCREEN_ORIENTATION_PORTRAIT -> ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
-            else -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+            else -> ActivityInfo.SCREEN_ORIENTATION_SENSOR
         }
     }
 
