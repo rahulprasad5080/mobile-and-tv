@@ -78,7 +78,7 @@ class PlayerManager(private val context: Context) {
 
     fun getPlayer(): Player? = exoPlayer
 
-    fun playMedia(item: VideoMediaItem) {
+    fun playMedia(item: VideoMediaItem, startPositionMs: Long = 0) {
         val mediaItem = MediaItem.Builder()
             .setUri(item.uri)
             .setMimeType(item.mimeType)
@@ -100,6 +100,9 @@ class PlayerManager(private val context: Context) {
             .build()
 
         exoPlayer?.setMediaItem(mediaItem)
+        if (startPositionMs > 0) {
+            exoPlayer?.seekTo(startPositionMs)
+        }
         exoPlayer?.prepare()
     }
 

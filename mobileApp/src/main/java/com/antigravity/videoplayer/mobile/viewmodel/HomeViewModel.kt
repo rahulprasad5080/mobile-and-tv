@@ -32,6 +32,14 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         }
     }.stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
+    val groupedVideos: StateFlow<Map<String, List<VideoMediaItem>>> = videos.combine(_searchQuery) { videoList, query ->
+        videoList.groupBy { it.folderName }
+    }.stateIn(viewModelScope, SharingStarted.Lazily, emptyMap())
+
+    val lastPlayedVideo: StateFlow<VideoMediaItem?> = _recentlyPlayed.combine(_videos) { recently, all ->
+        recently.firstOrNull()
+    }.stateIn(viewModelScope, SharingStarted.Lazily, null)
+
     fun loadVideos() {
         viewModelScope.launch {
             repository.getVideos(getApplication()).collect {

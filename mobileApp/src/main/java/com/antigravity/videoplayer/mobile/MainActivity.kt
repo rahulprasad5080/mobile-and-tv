@@ -9,13 +9,15 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.*
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import com.antigravity.videoplayer.core.model.VideoMediaItem
+import com.antigravity.videoplayer.core.repository.PlaybackProgressRepository
+import com.antigravity.videoplayer.mobile.ui.screen.home.FolderVideosScreen
 import com.antigravity.videoplayer.mobile.ui.screen.home.HomeScreen
 import com.antigravity.videoplayer.mobile.ui.screen.player.VideoPlayerScreen
 import com.antigravity.videoplayer.mobile.viewmodel.HomeViewModel
@@ -66,6 +68,10 @@ class MainActivity : ComponentActivity() {
     fun AppNavigation() {
         val navController = rememberNavController()
         val playerViewModel: MobilePlayerViewModel = viewModel()
+        val progressRepository = remember { PlaybackProgressRepository(this) }
+        
+        var selectedFolderName by remember { mutableStateOf("") }
+        var selectedFolderVideos by remember { mutableStateOf<List<VideoMediaItem>>(emptyList()) }
 
         NavHost(navController = navController, startDestination = "home") {
             composable("home") {
@@ -73,9 +79,28 @@ class MainActivity : ComponentActivity() {
                     viewModel = homeViewModel,
                     onVideoClick = { video ->
                         homeViewModel.addToRecentlyPlayed(video)
-                        playerViewModel.playMedia(video)
+                        val progress = progressRepository.getProgress(video.id)
+                        playerViewModel.playMedia(video, progress)
                         navController.navigate("player")
+                    },
+                    onFolderClick = { name, videos ->
+                        selectedFolderName = name
+                        selectedFolderVideos = videos
+                        navController.navigate("folder_videos")
                     }
+                )
+            }
+            composable("folder_videos") {
+                FolderVideosScreen(
+                    folderName = selectedFolderName,
+                    videos = selectedFolderVideos,
+                    onVideoClick = { video ->
+                        homeViewModel.addToRecentlyPlayed(video)
+                        val progress = progressRepository.getProgress(video.id)
+                        playerViewModel.playMedia(video, progress)
+                        navController.navigate("player")
+                    },
+                    onBackPressed = { navController.popBackStack() }
                 )
             }
             composable("player") {

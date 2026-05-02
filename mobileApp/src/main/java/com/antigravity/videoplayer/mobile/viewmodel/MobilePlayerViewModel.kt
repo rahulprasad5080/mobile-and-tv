@@ -8,6 +8,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.antigravity.videoplayer.core.model.VideoMediaItem
 import com.antigravity.videoplayer.core.player.PlayerManager
+import com.antigravity.videoplayer.core.repository.PlaybackProgressRepository
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -19,6 +20,9 @@ class MobilePlayerViewModel(application: Application) : AndroidViewModel(applica
 
     val playerManager = PlayerManager(application)
     private val audioManager = application.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+    private val progressRepository = PlaybackProgressRepository(application)
+    
+    private var currentVideo: VideoMediaItem? = null
     
     private val _isPlaying = MutableStateFlow(true)
     val isPlaying: StateFlow<Boolean> = _isPlaying.asStateFlow()
@@ -75,8 +79,9 @@ class MobilePlayerViewModel(application: Application) : AndroidViewModel(applica
         }
     }
 
-    fun playMedia(item: VideoMediaItem) {
-        playerManager.playMedia(item)
+    fun playMedia(item: VideoMediaItem, startPositionMs: Long = 0) {
+        currentVideo = item
+        playerManager.playMedia(item, startPositionMs)
     }
 
     fun togglePlayPause() {
@@ -149,6 +154,9 @@ class MobilePlayerViewModel(application: Application) : AndroidViewModel(applica
 
     override fun onCleared() {
         super.onCleared()
+        currentVideo?.let {
+            progressRepository.saveProgress(it.id, playerManager.getPlayer()?.currentPosition ?: 0L)
+        }
         playerManager.releasePlayer()
     }
 }
