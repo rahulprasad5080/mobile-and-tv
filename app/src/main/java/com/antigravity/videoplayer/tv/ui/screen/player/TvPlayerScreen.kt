@@ -31,6 +31,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.ui.PlayerView
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -51,6 +52,8 @@ fun TvPlayerScreen(
     val currentPosition by viewModel.currentPosition.collectAsState()
     val duration by viewModel.duration.collectAsState()
     val currentTitle by viewModel.currentTitle.collectAsState()
+    val audioTracks by viewModel.audioTracks.collectAsState()
+    val subtitleTracks by viewModel.subtitleTracks.collectAsState()
     var showTrackSelection by remember { mutableStateOf(false) }
     var subtitleSize by remember { mutableStateOf(SubtitleSize.Medium) }
 
@@ -162,11 +165,11 @@ fun TvPlayerScreen(
     if (showTrackSelection) {
         TrackSelectionDialog(
             onDismiss = { showTrackSelection = false },
-            audioTracks = viewModel.playerManager.getAudioTracks(),
-            subtitleTracks = viewModel.playerManager.getSubtitleTracks(),
+            audioTracks = audioTracks,
+            subtitleTracks = subtitleTracks,
             selectedSubtitleSize = subtitleSize,
-            onAudioSelect = { viewModel.playerManager.selectAudioTrack(it) },
-            onSubtitleSelect = { viewModel.playerManager.selectSubtitleTrack(it) },
+            onAudioSelect = { viewModel.selectAudioTrack(it) },
+            onSubtitleSelect = { viewModel.selectSubtitleTrack(it) },
             onSubtitleSizeChange = { subtitleSize = it }
         )
     }
@@ -200,8 +203,11 @@ private fun TrackSelectionDialog(
 
                 Text(text = "Audio Tracks", style = MaterialTheme.typography.titleMedium)
                 audioTracks.forEach { track ->
-                    Button(onClick = { onAudioSelect(track.id) }) {
-                        Text(text = listOfNotNull(track.language, track.label).joinToString(" - ").ifBlank { "Unknown" })
+                    Button(
+                        onClick = { onAudioSelect(track.id) },
+                        colors = trackButtonColors(track.isSelected)
+                    ) {
+                        Text(text = track.displayLabel)
                     }
                 }
 
@@ -219,12 +225,18 @@ private fun TrackSelectionDialog(
                 Spacer(modifier = Modifier.height(18.dp))
 
                 Text(text = "Subtitles", style = MaterialTheme.typography.titleMedium)
-                Button(onClick = { onSubtitleSelect(null) }) {
+                Button(
+                    onClick = { onSubtitleSelect(null) },
+                    colors = trackButtonColors(subtitleTracks.none { it.isSelected })
+                ) {
                     Text("Off")
                 }
                 subtitleTracks.forEach { track ->
-                    Button(onClick = { onSubtitleSelect(track.id) }) {
-                        Text(text = listOfNotNull(track.language, track.label).joinToString(" - ").ifBlank { "Unknown" })
+                    Button(
+                        onClick = { onSubtitleSelect(track.id) },
+                        colors = trackButtonColors(track.isSelected)
+                    ) {
+                        Text(text = track.displayLabel)
                     }
                 }
 
@@ -237,6 +249,12 @@ private fun TrackSelectionDialog(
         }
     }
 }
+
+@Composable
+private fun trackButtonColors(selected: Boolean) = ButtonDefaults.buttonColors(
+    containerColor = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
+    contentColor = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+)
 
 private fun formatTime(ms: Long): String {
     val totalSeconds = ms / 1000

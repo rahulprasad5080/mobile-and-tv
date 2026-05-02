@@ -25,6 +25,8 @@ data class AudioTrackInfo(
     val language: String?,
     val label: String?,
     val bitRate: Int,
+    val channelCount: Int,
+    val displayLabel: String,
     val isSelected: Boolean
 )
 
@@ -32,5 +34,6 @@ data class SubtitleTrackInfo(
     val id: String,
     val language: String?,
     val label: String?,
+    val displayLabel: String,
     val isSelected: Boolean
 )

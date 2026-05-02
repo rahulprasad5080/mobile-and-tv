@@ -615,7 +615,12 @@ fun AdvancedSettingsDialog(
                 if (isLandscape) {
                     Row(modifier = Modifier.fillMaxWidth()) {
                         Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
-                            TracksSection(audioTracks, onAudioTrackSelect)
+                            TracksSection(
+                                audioTracks = audioTracks,
+                                subtitleTracks = subtitleTracks,
+                                onAudioTrackSelect = onAudioTrackSelect,
+                                onSubtitleTrackSelect = onSubtitleTrackSelect
+                            )
                         }
                         Column(modifier = Modifier.weight(1f).padding(start = 12.dp)) {
                             PlaybackSection(currentSpeed, onSpeedChange)
@@ -624,7 +629,12 @@ fun AdvancedSettingsDialog(
                         }
                     }
                 } else {
-                    TracksSection(audioTracks, onAudioTrackSelect)
+                    TracksSection(
+                        audioTracks = audioTracks,
+                        subtitleTracks = subtitleTracks,
+                        onAudioTrackSelect = onAudioTrackSelect,
+                        onSubtitleTrackSelect = onSubtitleTrackSelect
+                    )
                     HorizontalDivider(color = Color.White.copy(alpha = 0.1f), modifier = Modifier.padding(vertical = 16.dp))
                     PlaybackSection(currentSpeed, onSpeedChange)
                     HorizontalDivider(color = Color.White.copy(alpha = 0.1f), modifier = Modifier.padding(vertical = 16.dp))
@@ -639,7 +649,9 @@ fun AdvancedSettingsDialog(
 @Composable
 fun TracksSection(
     audioTracks: List<AudioTrackInfo>,
-    onAudioTrackSelect: (String) -> Unit
+    subtitleTracks: List<SubtitleTrackInfo>,
+    onAudioTrackSelect: (String) -> Unit,
+    onSubtitleTrackSelect: (String?) -> Unit
 ) {
     if (audioTracks.isNotEmpty()) {
         SettingsSectionHeader(Icons.Rounded.AudioFile, "Audio Tracks")
@@ -651,10 +663,30 @@ fun TracksSection(
             audioTracks.forEach { track ->
                 SettingsChip(
                     selected = track.isSelected,
-                    label = track.label ?: track.language ?: "Unknown",
+                    label = track.displayLabel,
                     onClick = { onAudioTrackSelect(track.id) }
                 )
             }
+        }
+    }
+
+    Spacer(modifier = Modifier.height(16.dp))
+    SettingsSectionHeader(Icons.Rounded.Subtitles, "Subtitle Tracks")
+    FlowRow(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        SettingsChip(
+            selected = subtitleTracks.none { it.isSelected },
+            label = "Off",
+            onClick = { onSubtitleTrackSelect(null) }
+        )
+        subtitleTracks.forEach { track ->
+            SettingsChip(
+                selected = track.isSelected,
+                label = track.displayLabel,
+                onClick = { onSubtitleTrackSelect(track.id) }
+            )
         }
     }
 }
@@ -819,7 +851,7 @@ fun SubtitleSelectionDialog(
                         onClick = { onSubtitleTrackSelect(track.id) },
                         label = { 
                             Text(
-                                track.label ?: track.language ?: "Unknown", 
+                                track.displayLabel,
                                 color = if (track.isSelected) Color.White else Color.Gray 
                             ) 
                         },

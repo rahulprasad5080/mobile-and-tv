@@ -3,6 +3,8 @@ package com.antigravity.videoplayer.tv.viewmodel
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.antigravity.videoplayer.core.model.AudioTrackInfo
+import com.antigravity.videoplayer.core.model.SubtitleTrackInfo
 import com.antigravity.videoplayer.core.model.VideoMediaItem
 import com.antigravity.videoplayer.core.player.PlayerManager
 import com.antigravity.videoplayer.core.repository.PlaybackProgressRepository
@@ -31,9 +33,21 @@ class TvPlayerViewModel(application: Application) : AndroidViewModel(application
     private val _currentTitle = MutableStateFlow("")
     val currentTitle: StateFlow<String> = _currentTitle.asStateFlow()
 
+    private val _audioTracks = MutableStateFlow<List<AudioTrackInfo>>(emptyList())
+    val audioTracks: StateFlow<List<AudioTrackInfo>> = _audioTracks.asStateFlow()
+
+    private val _subtitleTracks = MutableStateFlow<List<SubtitleTrackInfo>>(emptyList())
+    val subtitleTracks: StateFlow<List<SubtitleTrackInfo>> = _subtitleTracks.asStateFlow()
+
     init {
         playerManager.initializePlayer()
         startProgressUpdate()
+        viewModelScope.launch {
+            playerManager.currentTracks.collect {
+                _audioTracks.value = playerManager.getAudioTracks()
+                _subtitleTracks.value = playerManager.getSubtitleTracks()
+            }
+        }
     }
 
     private fun startProgressUpdate() {
@@ -80,6 +94,10 @@ class TvPlayerViewModel(application: Application) : AndroidViewModel(application
         playerManager.seekTo(nextPosition)
         _currentPosition.value = nextPosition
     }
+
+    fun selectAudioTrack(id: String) = playerManager.selectAudioTrack(id)
+
+    fun selectSubtitleTrack(id: String?) = playerManager.selectSubtitleTrack(id)
 
     fun stopPlayback() {
         currentVideo?.let {

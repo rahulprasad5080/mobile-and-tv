@@ -4,6 +4,7 @@ import android.content.Context
 import kotlin.OptIn
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
+import androidx.media3.common.Format
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.PlaybackException
@@ -17,6 +18,7 @@ import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 import com.antigravity.videoplayer.core.model.AudioTrackInfo
 import com.antigravity.videoplayer.core.model.SubtitleTrackInfo
 import com.antigravity.videoplayer.core.model.VideoMediaItem
+import java.util.Locale
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -204,6 +206,8 @@ class PlayerManager(private val context: Context) {
                             language = format.language,
                             label = format.label,
                             bitRate = format.bitrate,
+                            channelCount = format.channelCount,
+                            displayLabel = buildAudioTrackLabel(format.label, format.language, format.channelCount),
                             isSelected = group.isTrackSelected(i)
                         )
                     )
@@ -227,6 +231,7 @@ class PlayerManager(private val context: Context) {
                             id = "subtitle_${groupIndex}_$i",
                             language = format.language,
                             label = format.label,
+                            displayLabel = buildSubtitleTrackLabel(format.label, format.language),
                             isSelected = group.isTrackSelected(i)
                         )
                     )
@@ -277,6 +282,59 @@ class PlayerManager(private val context: Context) {
                     .setOverrideForType(TrackSelectionOverride(group.mediaTrackGroup, trackIndex))
                     .build()
             }
+        }
+    }
+
+    private fun buildAudioTrackLabel(label: String?, language: String?, channelCount: Int): String {
+        val baseLabel = label?.takeIf { it.isNotBlank() } ?: resolveLanguageName(language)
+        val channelLabel = resolveChannelLabel(channelCount)
+        return if (channelLabel != null) "$baseLabel ($channelLabel)" else baseLabel
+    }
+
+    private fun buildSubtitleTrackLabel(label: String?, language: String?): String {
+        val baseLabel = label?.takeIf { it.isNotBlank() } ?: resolveLanguageName(language)
+        return if (baseLabel.contains("subtitle", ignoreCase = true)) {
+            baseLabel
+        } else {
+            "$baseLabel Subtitles"
+        }
+    }
+
+    private fun resolveLanguageName(languageCode: String?): String {
+        val normalizedCode = languageCode
+            ?.trim()
+            ?.takeIf { it.isNotEmpty() }
+            ?.replace('_', '-')
+            ?: return "Unknown"
+
+        if (normalizedCode.equals("und", ignoreCase = true)) return "Unknown"
+
+        val locale = Locale.forLanguageTag(normalizedCode)
+        val displayLanguage = locale.getDisplayLanguage(Locale.ENGLISH).takeIf { it.isNotBlank() }
+        if (!displayLanguage.isNullOrBlank() && !displayLanguage.equals(normalizedCode, ignoreCase = true)) {
+            return displayLanguage.replaceFirstChar { first ->
+                if (first.isLowerCase()) first.titlecase(Locale.ENGLISH) else first.toString()
+            }
+        }
+
+        val legacyLocale = Locale(normalizedCode)
+        val legacyDisplayLanguage = legacyLocale.getDisplayLanguage(Locale.ENGLISH)
+        return legacyDisplayLanguage
+            .takeIf { it.isNotBlank() && !it.equals(normalizedCode, ignoreCase = true) }
+            ?.replaceFirstChar { first ->
+                if (first.isLowerCase()) first.titlecase(Locale.ENGLISH) else first.toString()
+            }
+            ?: "Unknown"
+    }
+
+    private fun resolveChannelLabel(channelCount: Int): String? {
+        return when (channelCount) {
+            1 -> "Mono"
+            2 -> "Stereo"
+            6 -> "5.1"
+            8 -> "7.1"
+            Format.NO_VALUE -> null
+            else -> if (channelCount > 0) "$channelCount ch" else null
         }
     }
 }
