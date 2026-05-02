@@ -4,11 +4,11 @@ plugins {
 }
 
 android {
-    namespace = "com.antigravity.videoplayer.mobile"
+    namespace = "com.mplayer.videoplayer"
     compileSdk = 34
 
     defaultConfig {
-        applicationId = "com.antigravity.videoplayer.mobile"
+        applicationId = "com.mplayer.videoplayer"
         minSdk = 24
         targetSdk = 34
         versionCode = 1
