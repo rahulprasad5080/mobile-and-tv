@@ -621,21 +621,6 @@ fun AdvancedSettingsDialog(
                     HorizontalDivider(color = Color.White.copy(alpha = 0.1f), modifier = Modifier.padding(vertical = 16.dp))
                     DisplaySection(resizeMode, onResizeModeChange)
                 }
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                // Done Button
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End
-                ) {
-                    TextButton(
-                        onClick = onDismiss,
-                        colors = ButtonDefaults.textButtonColors(contentColor = PrimaryAccent)
-                    ) { 
-                        Text("Done", fontWeight = FontWeight.Bold) 
-                    }
-                }
             }
         }
     }
