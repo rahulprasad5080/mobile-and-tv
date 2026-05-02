@@ -110,7 +110,6 @@ class MainActivity : ComponentActivity() {
         val progressRepository = remember { PlaybackProgressRepository(this) }
         
         var selectedFolderName by remember { mutableStateOf("") }
-        var selectedFolderVideos by remember { mutableStateOf<List<VideoMediaItem>>(emptyList()) }
 
         NavHost(navController = navController, startDestination = "home") {
             composable("home") {
@@ -122,17 +121,18 @@ class MainActivity : ComponentActivity() {
                         playerViewModel.playMedia(video, progress)
                         navController.navigate("player")
                     },
-                    onFolderClick = { name, videos ->
+                    onFolderClick = { name, _ ->
                         selectedFolderName = name
-                        selectedFolderVideos = videos
                         navController.navigate("folder_videos")
                     }
                 )
             }
             composable("folder_videos") {
+                val groupedVideos by homeViewModel.groupedVideos.collectAsState()
+                val folderVideos = groupedVideos[selectedFolderName] ?: emptyList()
                 FolderVideosScreen(
                     folderName = selectedFolderName,
-                    videos = selectedFolderVideos,
+                    videos = folderVideos,
                     onVideoClick = { video ->
                         homeViewModel.addToRecentlyPlayed(video)
                         val progress = progressRepository.getProgress(video.id)

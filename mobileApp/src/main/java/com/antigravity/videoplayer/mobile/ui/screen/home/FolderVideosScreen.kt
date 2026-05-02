@@ -165,7 +165,7 @@ fun VideoListItem(
 
             Spacer(modifier = Modifier.width(16.dp))
 
-            Column {
+            Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = video.title,
                     style = MaterialTheme.typography.bodyLarge.copy(
@@ -180,8 +180,6 @@ fun VideoListItem(
                     color = Color.Gray
                 )
             }
-
-            Spacer(modifier = Modifier.weight(1f))
 
             Box {
                 IconButton(onClick = { showMenu = true }) {

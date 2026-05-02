@@ -106,34 +106,6 @@ fun HomeScreen(
 }
 
 @Composable
-fun CategoryChip(category: CategoryItem) {
-    Surface(
-        modifier = Modifier.clip(RoundedCornerShape(20.dp)),
-        color = SurfaceColor,
-        onClick = { /* Select category */ }
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Icon(
-                category.icon,
-                contentDescription = null,
-                tint = Color.White,
-                modifier = Modifier.size(18.dp)
-            )
-            Text(
-                text = category.name,
-                color = Color.White,
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.Medium
-            )
-        }
-    }
-}
-
-@Composable
 fun FolderItem(
     name: String,
     videoCount: Int,
