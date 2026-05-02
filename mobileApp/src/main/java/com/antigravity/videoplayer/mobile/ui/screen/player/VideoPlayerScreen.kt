@@ -4,6 +4,9 @@ import android.app.Activity
 import android.content.pm.ActivityInfo
 import android.view.ViewGroup
 import android.widget.FrameLayout
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import kotlin.OptIn
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
@@ -79,6 +82,7 @@ fun VideoPlayerScreen(
     LaunchedEffect(orientationMode) {
         (context as? Activity)?.requestedOrientation = orientationMode
     }
+
 
     DisposableEffect(Unit) {
         onDispose {
@@ -299,7 +303,6 @@ fun VideoPlayerScreen(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .statusBarsPadding()
                         .padding(16.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
@@ -411,7 +414,6 @@ fun VideoPlayerScreen(
             ) {
                 Column(
                     modifier = Modifier
-                        .navigationBarsPadding()
                         .padding(bottom = 24.dp, start = 20.dp, end = 20.dp)
                 ) {
                     Row(

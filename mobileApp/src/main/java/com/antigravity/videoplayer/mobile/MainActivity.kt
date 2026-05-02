@@ -22,6 +22,12 @@ import com.antigravity.videoplayer.mobile.ui.screen.home.HomeScreen
 import com.antigravity.videoplayer.mobile.ui.screen.player.VideoPlayerScreen
 import com.antigravity.videoplayer.mobile.viewmodel.HomeViewModel
 import com.antigravity.videoplayer.mobile.viewmodel.MobilePlayerViewModel
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
+import android.view.WindowManager
+
+
 
 class MainActivity : ComponentActivity() {
 
@@ -40,7 +46,18 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         
+        WindowCompat.setDecorFitsSystemWindows(window, false)
+        val controller = WindowCompat.getInsetsController(window, window.decorView)
+        controller.hide(WindowInsetsCompat.Type.systemBars())
+        controller.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            window.attributes.layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
+        }
+
+
         checkAndRequestPermissions()
+
 
         setContent {
             AppNavigation()
