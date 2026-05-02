@@ -4,7 +4,7 @@ A Kotlin/Jetpack Compose video player that ships as one APK for both phones/tabl
 
 ## Project Structure
 
-- `:app`: The single Android application module. It contains mobile UI under `com.antigravity.videoplayer.mobile` and TV UI under `com.antigravity.videoplayer.tv`.
+- `:app`: The single Android application module. It contains mobile UI under `com.mplayer.videoplayer.mobile` and TV UI under `com.mplayer.videoplayer.tv`.
 - `:core`: Shared playback, repository, and model logic used by both mobile and TV experiences.
 
 ## Platform Support

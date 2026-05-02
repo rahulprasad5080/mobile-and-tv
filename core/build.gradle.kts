@@ -4,7 +4,7 @@ plugins {
 }
 
 android {
-    namespace = "com.antigravity.videoplayer.core"
+    namespace = "com.mplayer.videoplayer.core"
     compileSdk = 34
 
     defaultConfig {
