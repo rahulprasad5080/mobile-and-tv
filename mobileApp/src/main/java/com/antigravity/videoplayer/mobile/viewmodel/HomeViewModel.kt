@@ -4,7 +4,10 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.antigravity.videoplayer.core.model.VideoMediaItem
+import com.antigravity.videoplayer.core.repository.VideoFileRepository
 import com.antigravity.videoplayer.core.repository.VideoRepository
+import android.content.IntentSender
+import android.net.Uri
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -15,6 +18,10 @@ import kotlinx.coroutines.launch
 
 class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private val repository = VideoRepository()
+    private val fileRepository = VideoFileRepository()
+    
+    private val _pendingIntent = MutableStateFlow<IntentSender?>(null)
+    val pendingIntent: StateFlow<IntentSender?> = _pendingIntent.asStateFlow()
     
     private val _videos = MutableStateFlow<List<VideoMediaItem>>(emptyList())
     
@@ -57,5 +64,39 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         currentList.remove(video)
         currentList.add(0, video)
         _recentlyPlayed.value = currentList.take(10)
+    }
+
+    fun deleteVideo(video: VideoMediaItem) {
+        viewModelScope.launch {
+            val intentSender = fileRepository.deleteVideo(getApplication(), Uri.parse(video.uri.toString()))
+            if (intentSender != null) {
+                _pendingIntent.value = intentSender
+            } else {
+                loadVideos()
+            }
+        }
+    }
+
+    fun renameVideo(video: VideoMediaItem, newName: String) {
+        viewModelScope.launch {
+            val intentSender = fileRepository.renameVideo(getApplication(), Uri.parse(video.uri.toString()), newName)
+            if (intentSender != null) {
+                _pendingIntent.value = intentSender
+            } else {
+                loadVideos()
+            }
+        }
+    }
+
+    fun copyVideo(video: VideoMediaItem, targetName: String) {
+        viewModelScope.launch {
+            if (fileRepository.copyVideo(getApplication(), Uri.parse(video.uri.toString()), targetName)) {
+                loadVideos()
+            }
+        }
+    }
+
+    fun clearPendingIntent() {
+        _pendingIntent.value = null
     }
 }

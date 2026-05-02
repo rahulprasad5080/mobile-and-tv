@@ -7,8 +7,11 @@ import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.launch
 import androidx.compose.runtime.*
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -37,6 +40,15 @@ class MainActivity : ComponentActivity() {
     private val homeViewModel: HomeViewModel by viewModels()
     private val playerViewModel: MobilePlayerViewModel by viewModels()
 
+    private val intentSenderLauncher = registerForActivityResult(
+        ActivityResultContracts.StartIntentSenderForResult()
+    ) { result ->
+        if (result.resultCode == RESULT_OK) {
+            homeViewModel.loadVideos()
+        }
+        homeViewModel.clearPendingIntent()
+    }
+
     private val requestPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { isGranted: Boolean ->
@@ -62,6 +74,13 @@ class MainActivity : ComponentActivity() {
 
         checkAndRequestPermissions()
 
+        lifecycleScope.launch {
+            homeViewModel.pendingIntent.collect { intentSender ->
+                intentSender?.let {
+                    intentSenderLauncher.launch(IntentSenderRequest.Builder(it).build())
+                }
+            }
+        }
 
         setContent {
             AppNavigation()
@@ -120,6 +139,9 @@ class MainActivity : ComponentActivity() {
                         playerViewModel.playMedia(video, progress)
                         navController.navigate("player")
                     },
+                    onRename = { video, newName -> homeViewModel.renameVideo(video, newName) },
+                    onDelete = { video -> homeViewModel.deleteVideo(video) },
+                    onCopy = { video, targetName -> homeViewModel.copyVideo(video, targetName) },
                     onBackPressed = { navController.popBackStack() }
                 )
             }

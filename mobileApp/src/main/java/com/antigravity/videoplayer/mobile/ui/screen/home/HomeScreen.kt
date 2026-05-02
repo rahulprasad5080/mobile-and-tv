@@ -38,12 +38,6 @@ fun HomeScreen(
 ) {
     val groupedVideos by viewModel.groupedVideos.collectAsState()
     val lastPlayedVideo by viewModel.lastPlayedVideo.collectAsState()
-    val categories = listOf(
-        CategoryItem("Music", Icons.Default.MusicNote),
-        CategoryItem("Privacy", Icons.Default.Lock),
-        CategoryItem("MXShare", Icons.Default.Share),
-        CategoryItem("Video", Icons.Default.VideoLibrary)
-    )
 
     Scaffold(
         containerColor = DarkBackground,
@@ -59,17 +53,7 @@ fun HomeScreen(
                         )
                     )
                 },
-                actions = {
-                    IconButton(onClick = { /* Search */ }) {
-                        Icon(Icons.Default.Search, contentDescription = "Search", tint = Color.White)
-                    }
-                    IconButton(onClick = { /* Grid View */ }) {
-                        Icon(Icons.Default.GridView, contentDescription = "Layout", tint = Color.White)
-                    }
-                    IconButton(onClick = { /* Profile */ }) {
-                        Icon(Icons.Default.AccountCircle, contentDescription = "Profile", tint = Color.White)
-                    }
-                },
+
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = DarkBackground)
             )
         },
@@ -96,15 +80,7 @@ fun HomeScreen(
                 .fillMaxSize()
                 .padding(padding)
         ) {
-            // Category Chips
-            LazyRow(
-                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                items(categories) { category ->
-                    CategoryChip(category)
-                }
-            }
+            
 
             Spacer(modifier = Modifier.height(8.dp))
 
