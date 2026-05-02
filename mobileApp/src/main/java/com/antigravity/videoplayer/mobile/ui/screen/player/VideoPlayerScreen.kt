@@ -86,6 +86,7 @@ fun VideoPlayerScreen(
 
     DisposableEffect(Unit) {
         onDispose {
+            viewModel.stopPlayback()
             (context as? Activity)?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
         }
     }

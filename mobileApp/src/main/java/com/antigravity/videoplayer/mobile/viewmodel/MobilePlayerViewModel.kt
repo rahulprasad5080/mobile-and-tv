@@ -152,6 +152,13 @@ class MobilePlayerViewModel(application: Application) : AndroidViewModel(applica
         }
     }
 
+    fun stopPlayback() {
+        currentVideo?.let {
+            progressRepository.saveProgress(it.id, playerManager.getPlayer()?.currentPosition ?: 0L)
+        }
+        playerManager.pause()
+    }
+
     override fun onCleared() {
         super.onCleared()
         currentVideo?.let {
