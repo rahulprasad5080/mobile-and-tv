@@ -26,12 +26,16 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import android.view.WindowManager
+import android.app.PictureInPictureParams
+import android.content.res.Configuration
+
 
 
 
 class MainActivity : ComponentActivity() {
 
     private val homeViewModel: HomeViewModel by viewModels()
+    private val playerViewModel: MobilePlayerViewModel by viewModels()
 
     private val requestPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -84,7 +88,6 @@ class MainActivity : ComponentActivity() {
     @Composable
     fun AppNavigation() {
         val navController = rememberNavController()
-        val playerViewModel: MobilePlayerViewModel = viewModel()
         val progressRepository = remember { PlaybackProgressRepository(this) }
         
         var selectedFolderName by remember { mutableStateOf("") }
@@ -127,5 +130,17 @@ class MainActivity : ComponentActivity() {
                 )
             }
         }
-    } 
+    }
+
+    override fun onUserLeaveHint() {
+        super.onUserLeaveHint()
+        if (playerViewModel.isPlaying.value && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            enterPictureInPictureMode(PictureInPictureParams.Builder().build())
+        }
+    }
+
+    override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean, newConfig: Configuration) {
+        super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
+        playerViewModel.setPipMode(isInPictureInPictureMode)
+    }
 }

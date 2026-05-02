@@ -71,6 +71,7 @@ fun VideoPlayerScreen(
     var gestureIcon by remember { mutableStateOf<ImageVector?>(null) }
     var activeGesture by remember { mutableStateOf<GestureType?>(null) }
     val orientationMode by viewModel.orientationMode.collectAsState()
+    val isInPipMode by viewModel.isInPipMode.collectAsState()
     
     val scope = rememberCoroutineScope()
 
@@ -97,8 +98,8 @@ fun VideoPlayerScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(Color.Black)
-            .pointerInput(isLocked) {
-                if (isLocked) return@pointerInput
+            .pointerInput(isLocked, isInPipMode) {
+                if (isLocked || isInPipMode) return@pointerInput
                 
                 var totalDragAmountVertical = 0f
                 var totalDragAmountHorizontal = 0f
@@ -159,7 +160,8 @@ fun VideoPlayerScreen(
                     }
                 )
             }
-            .pointerInput(isLocked) {
+            .pointerInput(isLocked, isInPipMode) {
+                if (isInPipMode) return@pointerInput
                 detectTapGestures(
                     onDoubleTap = { offset ->
                         if (!isLocked) {
@@ -199,10 +201,10 @@ fun VideoPlayerScreen(
                 view.player = player
                 view.resizeMode = resizeMode
             },
-            modifier = Modifier.fillMaxSize()
         )
-
-        // Gesture Feedback UI (Pill style for Brightness/Volume)
+        
+        if (!isInPipMode) {
+            // Gesture Feedback UI (Pill style for Brightness/Volume)
         Row(
             modifier = Modifier
                 .fillMaxSize()
@@ -479,8 +481,9 @@ fun VideoPlayerScreen(
             }
         }
     }
+}
 
-    if (showSettings) {
+    if (showSettings && !isInPipMode) {
         AdvancedSettingsDialog(
             currentSpeed = playbackSpeed,
             onSpeedChange = { viewModel.setPlaybackSpeed(it) },

@@ -53,6 +53,9 @@ class MobilePlayerViewModel(application: Application) : AndroidViewModel(applica
 
     private val _orientationMode = MutableStateFlow(ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE)
     val orientationMode: StateFlow<Int> = _orientationMode.asStateFlow()
+    
+    private val _isInPipMode = MutableStateFlow(false)
+    val isInPipMode: StateFlow<Boolean> = _isInPipMode.asStateFlow()
 
     private var hideJob: Job? = null
 
@@ -156,6 +159,13 @@ class MobilePlayerViewModel(application: Application) : AndroidViewModel(applica
     fun getSubtitleTracks() = playerManager.getSubtitleTracks()
     fun selectAudioTrack(id: String) = playerManager.selectAudioTrack(id)
     fun selectSubtitleTrack(id: String?) = playerManager.selectSubtitleTrack(id)
+
+    fun setPipMode(inPipMode: Boolean) {
+        _isInPipMode.value = inPipMode
+        if (inPipMode) {
+            _showControls.value = false
+        }
+    }
 
     fun stopPlayback() {
         currentVideo?.let {
