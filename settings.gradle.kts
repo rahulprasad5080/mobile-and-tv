@@ -15,6 +15,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "AndroidVideoPlayer"
 include(":core")
-include(":common-ui")
-include(":mobileApp")
-include(":tvApp")
+include(":app")
