@@ -19,6 +19,7 @@ import kotlinx.coroutines.launch
 class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private val repository = VideoRepository()
     private val fileRepository = VideoFileRepository()
+    private val progressRepository = PlaybackProgressRepository(application)
     
     private val _pendingIntent = MutableStateFlow<IntentSender?>(null)
     val pendingIntent: StateFlow<IntentSender?> = _pendingIntent.asStateFlow()
@@ -30,6 +31,8 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _recentlyPlayed = MutableStateFlow<List<VideoMediaItem>>(emptyList())
     val recentlyPlayed: StateFlow<List<VideoMediaItem>> = _recentlyPlayed.asStateFlow()
+
+    private val _lastPlayedVideoId = MutableStateFlow<String?>(progressRepository.getLastPlayedVideoId())
 
     val videos: StateFlow<List<VideoMediaItem>> = combine(_videos, _searchQuery) { videos, query ->
         if (query.isBlank()) {
@@ -43,8 +46,8 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         videoList.groupBy { it.folderName }
     }.stateIn(viewModelScope, SharingStarted.Lazily, emptyMap())
 
-    val lastPlayedVideo: StateFlow<VideoMediaItem?> = _recentlyPlayed.combine(_videos) { recently, all ->
-        recently.firstOrNull()
+    val lastPlayedVideo: StateFlow<VideoMediaItem?> = combine(_lastPlayedVideoId, _videos) { lastId, all ->
+        all.find { it.id == lastId }
     }.stateIn(viewModelScope, SharingStarted.Lazily, null)
 
     fun loadVideos() {
@@ -60,6 +63,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun addToRecentlyPlayed(video: VideoMediaItem) {
+        _lastPlayedVideoId.value = video.id
         val currentList = _recentlyPlayed.value.toMutableList()
         currentList.remove(video)
         currentList.add(0, video)

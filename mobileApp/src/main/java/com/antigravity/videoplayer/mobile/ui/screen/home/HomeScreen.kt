@@ -20,6 +20,9 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.style.TextOverflow
+import coil.compose.AsyncImage
 import com.antigravity.videoplayer.core.model.VideoMediaItem
 import com.antigravity.videoplayer.mobile.viewmodel.HomeViewModel
 
@@ -57,23 +60,7 @@ fun HomeScreen(
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = DarkBackground)
             )
         },
-        floatingActionButton = {
-            if (lastPlayedVideo != null) {
-                FloatingActionButton(
-                    onClick = { onVideoClick(lastPlayedVideo!!) },
-                    containerColor = PrimaryBlue,
-                    contentColor = Color.White,
-                    shape = CircleShape,
-                    modifier = Modifier.size(64.dp)
-                ) {
-                    Icon(
-                        Icons.Default.PlayArrow,
-                        contentDescription = "Resume Last Play",
-                        modifier = Modifier.size(32.dp)
-                    )
-                }
-            }
-        }
+        floatingActionButton = {}
     ) { padding ->
         Column(
             modifier = Modifier
@@ -87,8 +74,17 @@ fun HomeScreen(
             // Folder List
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(bottom = 80.dp)
+                contentPadding = PaddingValues(bottom = 20.dp)
             ) {
+                if (lastPlayedVideo != null) {
+                    item {
+                        ContinueWatchingCard(
+                            video = lastPlayedVideo!!,
+                            onClick = { onVideoClick(lastPlayedVideo!!) }
+                        )
+                    }
+                }
+
                 groupedVideos.forEach { (folderName, videos) ->
                     item {
                         FolderItem(
@@ -166,6 +162,78 @@ fun FolderItem(
         }
     }
 }
+
+@Composable
+fun ContinueWatchingCard(
+    video: VideoMediaItem,
+    onClick: () -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp, vertical = 8.dp),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = SurfaceColor)
+    ) {
+        Row(
+            modifier = Modifier
+                .clickable(onClick = onClick)
+                .padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(100.dp, 60.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(Color.Black.copy(alpha = 0.3f))
+            ) {
+                AsyncImage(
+                    model = video.uri,
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop
+                )
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Color.Black.copy(alpha = 0.2f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        Icons.Default.PlayArrow,
+                        contentDescription = null,
+                        tint = Color.White.copy(alpha = 0.8f),
+                        modifier = Modifier.size(32.dp)
+                    )
+                }
+            }
+            
+            Spacer(modifier = Modifier.width(16.dp))
+            
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "CONTINUE WATCHING",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = PrimaryBlue,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = video.title,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = Color.White,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = video.folderName,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color.Gray
+                )
+            }
+        }
+    }
+}
+
 
 data class CategoryItem(val name: String, val icon: ImageVector)
 
