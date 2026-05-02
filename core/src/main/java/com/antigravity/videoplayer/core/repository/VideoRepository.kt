@@ -2,7 +2,6 @@ package com.antigravity.videoplayer.core.repository
 
 import android.content.ContentUris
 import android.content.Context
-import android.net.Uri
 import android.provider.MediaStore
 import com.antigravity.videoplayer.core.model.VideoMediaItem
 import kotlinx.coroutines.Dispatchers
@@ -11,37 +10,19 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 
 class VideoRepository {
-    
+
     fun getVideos(context: Context): Flow<List<VideoMediaItem>> = flow {
-        val remoteVideos = listOf(
-            VideoMediaItem(
-                id = "1",
-                title = "Big Buck Bunny",
-                description = "A large, lovable rabbit is bullied by three smaller rodents.",
-                thumbnailUri = Uri.parse("https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/images/BigBuckBunny.jpg"),
-                uri = Uri.parse("https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4")
-            ),
-            VideoMediaItem(
-                id = "2",
-                title = "Elephant Dream",
-                description = "Two people explore a strange, mechanical world.",
-                thumbnailUri = Uri.parse("https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/images/ElephantsDream.jpg"),
-                uri = Uri.parse("https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4")
-            )
-        )
-        
         val localVideos = mutableListOf<VideoMediaItem>()
         val projection = arrayOf(
             MediaStore.Video.Media._ID,
             MediaStore.Video.Media.DISPLAY_NAME,
             MediaStore.Video.Media.DURATION,
-            MediaStore.Video.Media.SIZE,
-            MediaStore.Video.Media.DATA,
-            MediaStore.Video.Media.BUCKET_DISPLAY_NAME
+            MediaStore.Video.Media.BUCKET_DISPLAY_NAME,
+            MediaStore.Video.Media.MIME_TYPE
         )
-        
+
         val sortOrder = "${MediaStore.Video.Media.DATE_ADDED} DESC"
-        
+
         context.contentResolver.query(
             MediaStore.Video.Media.EXTERNAL_CONTENT_URI,
             projection,
@@ -53,31 +34,34 @@ class VideoRepository {
             val nameColumn = cursor.getColumnIndexOrThrow(MediaStore.Video.Media.DISPLAY_NAME)
             val durationColumn = cursor.getColumnIndexOrThrow(MediaStore.Video.Media.DURATION)
             val bucketColumn = cursor.getColumnIndexOrThrow(MediaStore.Video.Media.BUCKET_DISPLAY_NAME)
-            
+            val mimeTypeColumn = cursor.getColumnIndexOrThrow(MediaStore.Video.Media.MIME_TYPE)
+
             while (cursor.moveToNext()) {
                 val id = cursor.getLong(idColumn)
                 val name = cursor.getString(nameColumn)
                 val duration = cursor.getLong(durationColumn)
                 val folderName = cursor.getString(bucketColumn) ?: "Internal memory"
+                val mimeType = cursor.getString(mimeTypeColumn)
                 val contentUri = ContentUris.withAppendedId(
                     MediaStore.Video.Media.EXTERNAL_CONTENT_URI,
                     id
                 )
-                
+
                 localVideos.add(
                     VideoMediaItem(
                         id = id.toString(),
                         title = name,
-                        description = "Local Video • ${formatDuration(duration)}",
+                        description = "Local Video - ${formatDuration(duration)}",
                         thumbnailUri = contentUri,
                         uri = contentUri,
-                        folderName = folderName
+                        folderName = folderName,
+                        mimeType = mimeType
                     )
                 )
             }
         }
-        
-        emit(remoteVideos + localVideos)
+
+        emit(localVideos)
     }.flowOn(Dispatchers.IO)
 
     private fun formatDuration(ms: Long): String {

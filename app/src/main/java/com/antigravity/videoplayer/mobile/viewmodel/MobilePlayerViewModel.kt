@@ -68,6 +68,7 @@ class MobilePlayerViewModel(application: Application) : AndroidViewModel(applica
     val subtitleTracks: StateFlow<List<SubtitleTrackInfo>> = _subtitleTracks.asStateFlow()
 
     private var hideJob: Job? = null
+    private var releaseJob: Job? = null
 
     init {
         playerManager.initializePlayer()
@@ -100,14 +101,17 @@ class MobilePlayerViewModel(application: Application) : AndroidViewModel(applica
     }
 
     fun playMedia(item: VideoMediaItem, startPositionMs: Long = 0) {
+        releaseJob?.cancel()
         currentVideo = item
         playerManager.playMedia(item, startPositionMs)
     }
 
     fun togglePlayPause() {
         if (_isPlaying.value) {
+            _isPlaying.value = false
             playerManager.pause()
         } else {
+            _isPlaying.value = true
             playerManager.resume()
         }
     }
@@ -188,14 +192,20 @@ class MobilePlayerViewModel(application: Application) : AndroidViewModel(applica
         currentVideo?.let {
             progressRepository.saveProgress(it.id, playerManager.getPlayer()?.currentPosition ?: 0L)
         }
-        playerManager.releasePlayer()
+        playerManager.pause()
+        releaseJob?.cancel()
+        releaseJob = viewModelScope.launch {
+            delay(150)
+            playerManager.releasePlayer()
+        }
     }
 
     override fun onCleared() {
-        super.onCleared()
+        releaseJob?.cancel()
         currentVideo?.let {
             progressRepository.saveProgress(it.id, playerManager.getPlayer()?.currentPosition ?: 0L)
         }
         playerManager.releasePlayer()
+        super.onCleared()
     }
 }

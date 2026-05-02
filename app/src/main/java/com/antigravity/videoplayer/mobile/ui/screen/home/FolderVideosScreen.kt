@@ -67,7 +67,10 @@ fun FolderVideosScreen(
                 .padding(padding),
             contentPadding = PaddingValues(vertical = 8.dp)
         ) {
-            items(videos) { video ->
+            items(
+                items = videos,
+                key = { it.id }
+            ) { video ->
                 VideoListItem(
                     video = video,
                     onClick = { onVideoClick(video) },

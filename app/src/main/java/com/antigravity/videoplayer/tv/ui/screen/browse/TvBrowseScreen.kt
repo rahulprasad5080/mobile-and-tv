@@ -73,7 +73,10 @@ fun TvBrowseScreen(
             horizontalArrangement = Arrangement.spacedBy(28.dp),
             contentPadding = PaddingValues(end = 56.dp)
         ) {
-            itemsIndexed(videos) { index, video ->
+            itemsIndexed(
+                items = videos,
+                key = { _, video -> video.id }
+            ) { index, video ->
                 VideoCard(
                     video = video,
                     focusRequester = rowFocusRequester.takeIf { index == 0 },

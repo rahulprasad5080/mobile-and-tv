@@ -1,6 +1,7 @@
 package com.antigravity.videoplayer.mobile.viewmodel
 
 import android.app.Application
+import android.database.ContentObserver
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.antigravity.videoplayer.core.model.VideoMediaItem
@@ -9,6 +10,10 @@ import com.antigravity.videoplayer.core.repository.VideoRepository
 import com.antigravity.videoplayer.core.repository.PlaybackProgressRepository
 import android.content.IntentSender
 import android.net.Uri
+import android.os.Handler
+import android.os.Looper
+import android.provider.MediaStore
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -34,6 +39,8 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     val recentlyPlayed: StateFlow<List<VideoMediaItem>> = _recentlyPlayed.asStateFlow()
 
     private val _lastPlayedVideoId = MutableStateFlow<String?>(progressRepository.getLastPlayedVideoId())
+    private var loadVideosJob: Job? = null
+    private var mediaObserver: ContentObserver? = null
 
     val videos: StateFlow<List<VideoMediaItem>> = combine(_videos, _searchQuery) { videos, query ->
         if (query.isBlank()) {
@@ -43,7 +50,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         }
     }.stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
-    val groupedVideos: StateFlow<Map<String, List<VideoMediaItem>>> = videos.combine(_searchQuery) { videoList, query ->
+    val groupedVideos: StateFlow<Map<String, List<VideoMediaItem>>> = videos.combine(_searchQuery) { videoList, _ ->
         videoList.groupBy { it.folderName }
     }.stateIn(viewModelScope, SharingStarted.Lazily, emptyMap())
 
@@ -52,10 +59,27 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     }.stateIn(viewModelScope, SharingStarted.Lazily, null)
 
     fun loadVideos() {
-        viewModelScope.launch {
+        loadVideosJob?.cancel()
+        loadVideosJob = viewModelScope.launch {
             repository.getVideos(getApplication()).collect {
                 _videos.value = it
             }
+        }
+    }
+
+    fun startMediaStoreObserver() {
+        if (mediaObserver != null) return
+
+        mediaObserver = object : ContentObserver(Handler(Looper.getMainLooper())) {
+            override fun onChange(selfChange: Boolean) {
+                loadVideos()
+            }
+        }.also { observer ->
+            getApplication<Application>().contentResolver.registerContentObserver(
+                MediaStore.Video.Media.EXTERNAL_CONTENT_URI,
+                true,
+                observer
+            )
         }
     }
 
@@ -103,5 +127,13 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
     fun clearPendingIntent() {
         _pendingIntent.value = null
+    }
+
+    override fun onCleared() {
+        mediaObserver?.let {
+            getApplication<Application>().contentResolver.unregisterContentObserver(it)
+        }
+        mediaObserver = null
+        super.onCleared()
     }
 }

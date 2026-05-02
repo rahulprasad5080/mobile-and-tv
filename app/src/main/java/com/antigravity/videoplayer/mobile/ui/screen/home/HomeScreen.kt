@@ -76,7 +76,7 @@ fun HomeScreen(
                 contentPadding = PaddingValues(bottom = 20.dp)
             ) {
                 if (lastPlayedVideo != null) {
-                    item {
+                    item(key = "continue_watching") {
                         ContinueWatchingCard(
                             video = lastPlayedVideo!!,
                             onClick = { onVideoClick(lastPlayedVideo!!) }
@@ -85,7 +85,7 @@ fun HomeScreen(
                 }
 
                 groupedVideos.forEach { (folderName, videos) ->
-                    item {
+                    item(key = folderName) {
                         FolderItem(
                             name = folderName,
                             videoCount = videos.size,

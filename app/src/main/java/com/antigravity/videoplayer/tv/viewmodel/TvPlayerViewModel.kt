@@ -17,6 +17,7 @@ class TvPlayerViewModel(application: Application) : AndroidViewModel(application
     val playerManager = PlayerManager(application)
     private val progressRepository = PlaybackProgressRepository(application)
     private var currentVideo: VideoMediaItem? = null
+    private var releaseJob: kotlinx.coroutines.Job? = null
 
     private val _isPlaying = MutableStateFlow(true)
     val isPlaying: StateFlow<Boolean> = _isPlaying.asStateFlow()
@@ -50,6 +51,7 @@ class TvPlayerViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun playMedia(item: VideoMediaItem, startPositionMs: Long = 0) {
+        releaseJob?.cancel()
         currentVideo = item
         _currentTitle.value = item.title
         playerManager.playMedia(item, startPositionMs)
@@ -57,8 +59,10 @@ class TvPlayerViewModel(application: Application) : AndroidViewModel(application
 
     fun togglePlayPause() {
         if (_isPlaying.value) {
+            _isPlaying.value = false
             playerManager.pause()
         } else {
+            _isPlaying.value = true
             playerManager.resume()
         }
     }
@@ -75,11 +79,20 @@ class TvPlayerViewModel(application: Application) : AndroidViewModel(application
         currentVideo?.let {
             progressRepository.saveProgress(it.id, playerManager.getPlayer()?.currentPosition ?: 0L)
         }
-        playerManager.releasePlayer()
+        playerManager.pause()
+        releaseJob?.cancel()
+        releaseJob = viewModelScope.launch {
+            delay(150)
+            playerManager.releasePlayer()
+        }
     }
 
     override fun onCleared() {
-        stopPlayback()
+        releaseJob?.cancel()
+        currentVideo?.let {
+            progressRepository.saveProgress(it.id, playerManager.getPlayer()?.currentPosition ?: 0L)
+        }
+        playerManager.releasePlayer()
         super.onCleared()
     }
 }

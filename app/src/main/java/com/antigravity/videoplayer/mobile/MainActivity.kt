@@ -47,6 +47,8 @@ class MainActivity : ComponentActivity() {
     private val playerViewModel: MobilePlayerViewModel by viewModels()
     private val tvBrowseViewModel: TvBrowseViewModel by viewModels()
     private val tvPlayerViewModel: TvPlayerViewModel by viewModels()
+    private var hasStartedMobilePlayback = false
+    private var hasStartedTvPlayback = false
 
     private val intentSenderLauncher = registerForActivityResult(
         ActivityResultContracts.StartIntentSenderForResult()
@@ -62,8 +64,10 @@ class MainActivity : ComponentActivity() {
     ) { isGranted: Boolean ->
         if (isGranted) {
             if (isTelevisionDevice()) {
+                tvBrowseViewModel.startMediaStoreObserver()
                 tvBrowseViewModel.loadVideos()
             } else {
+                homeViewModel.startMediaStoreObserver()
                 homeViewModel.loadVideos()
             }
         } else {
@@ -80,8 +84,6 @@ class MainActivity : ComponentActivity() {
             window.attributes.layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
         }
 
-
-        checkAndRequestPermissions()
 
         if (!isTelevisionDevice()) {
             lifecycleScope.launch {
@@ -100,27 +102,37 @@ class MainActivity : ComponentActivity() {
                 AppNavigation()
             }
         }
+
+        checkAndRequestPermissions()
     }
 
     private fun checkAndRequestPermissions() {
-        val permission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            Manifest.permission.READ_MEDIA_VIDEO
-        } else {
-            Manifest.permission.READ_EXTERNAL_STORAGE
-        }
-
         when {
-            ContextCompat.checkSelfPermission(this, permission) == PackageManager.PERMISSION_GRANTED -> {
+            hasVideoPermission() -> {
                 if (isTelevisionDevice()) {
+                    tvBrowseViewModel.startMediaStoreObserver()
                     tvBrowseViewModel.loadVideos()
                 } else {
+                    homeViewModel.startMediaStoreObserver()
                     homeViewModel.loadVideos()
                 }
             }
             else -> {
-                requestPermissionLauncher.launch(permission)
+                requestPermissionLauncher.launch(videoPermission())
             }
         }
+    }
+
+    private fun videoPermission(): String {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            Manifest.permission.READ_MEDIA_VIDEO
+        } else {
+            Manifest.permission.READ_EXTERNAL_STORAGE
+        }
+    }
+
+    private fun hasVideoPermission(): Boolean {
+        return ContextCompat.checkSelfPermission(this, videoPermission()) == PackageManager.PERMISSION_GRANTED
     }
 
     private fun isTelevisionDevice(): Boolean {
@@ -158,6 +170,7 @@ class MainActivity : ComponentActivity() {
                     onVideoClick = { video ->
                         homeViewModel.addToRecentlyPlayed(video)
                         val progress = progressRepository.getProgress(video.id)
+                        hasStartedMobilePlayback = true
                         playerViewModel.playMedia(video, progress)
                         navController.navigate("player")
                     },
@@ -176,6 +189,7 @@ class MainActivity : ComponentActivity() {
                     onVideoClick = { video ->
                         homeViewModel.addToRecentlyPlayed(video)
                         val progress = progressRepository.getProgress(video.id)
+                        hasStartedMobilePlayback = true
                         playerViewModel.playMedia(video, progress)
                         navController.navigate("player")
                     },
@@ -205,6 +219,7 @@ class MainActivity : ComponentActivity() {
                     viewModel = tvBrowseViewModel,
                     onVideoClick = { video ->
                         val progress = progressRepository.getProgress(video.id)
+                        hasStartedTvPlayback = true
                         tvPlayerViewModel.playMedia(video, progress)
                         navController.navigate("tv_player")
                     }
@@ -219,9 +234,22 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onStart() {
+        super.onStart()
+        if (!hasVideoPermission()) return
+
+        if (isTelevisionDevice()) {
+            tvBrowseViewModel.startMediaStoreObserver()
+            tvBrowseViewModel.loadVideos()
+        } else {
+            homeViewModel.startMediaStoreObserver()
+            homeViewModel.loadVideos()
+        }
+    }
+
     override fun onUserLeaveHint() {
         super.onUserLeaveHint()
-        if (isTelevisionDevice() && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+        if (isTelevisionDevice() && hasStartedTvPlayback && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val params = PictureInPictureParams.Builder()
                 .setAspectRatio(Rational(16, 9))
                 .build()
@@ -229,7 +257,7 @@ class MainActivity : ComponentActivity() {
             return
         }
 
-        if (playerViewModel.isPlaying.value && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+        if (hasStartedMobilePlayback && playerViewModel.isPlaying.value && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             enterPictureInPictureMode(PictureInPictureParams.Builder().build())
         }
     }
@@ -237,26 +265,31 @@ class MainActivity : ComponentActivity() {
     override fun onStop() {
         super.onStop()
         if (isTelevisionDevice()) {
-            if (!isInPictureInPictureMode || isFinishing) {
+            if (hasStartedTvPlayback && (!isInPictureInPictureMode || isFinishing)) {
                 tvPlayerViewModel.stopPlayback()
+                hasStartedTvPlayback = false
             }
             return
         }
 
         // Stop playback if we are not in PiP mode, or if the activity is finishing (e.g. PiP closed)
-        if (!isInPictureInPictureMode || isFinishing) {
+        if (hasStartedMobilePlayback && (!isInPictureInPictureMode || isFinishing)) {
             playerViewModel.stopPlayback()
+            hasStartedMobilePlayback = false
         }
     }
 
     override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean, newConfig: Configuration) {
         super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
         if (isTelevisionDevice()) {
-            if (!isInPictureInPictureMode) {
+            if (hasStartedTvPlayback && !isInPictureInPictureMode) {
                 tvPlayerViewModel.stopPlayback()
+                hasStartedTvPlayback = false
             }
             return
         }
+
+        if (!hasStartedMobilePlayback) return
 
         playerViewModel.setPipMode(isInPictureInPictureMode)
         
@@ -264,15 +297,18 @@ class MainActivity : ComponentActivity() {
         // we stop playback to ensure no ghost audio remains.
         if (!isInPictureInPictureMode) {
             playerViewModel.stopPlayback()
+            hasStartedMobilePlayback = false
         }
     }
 
     override fun onDestroy() {
         super.onDestroy()
-        if (isTelevisionDevice()) {
+        if (isTelevisionDevice() && hasStartedTvPlayback) {
             tvPlayerViewModel.stopPlayback()
-        } else {
+            hasStartedTvPlayback = false
+        } else if (hasStartedMobilePlayback) {
             playerViewModel.stopPlayback()
+            hasStartedMobilePlayback = false
         }
     }
 }

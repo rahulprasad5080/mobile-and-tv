@@ -5,6 +5,7 @@ import android.content.pm.ActivityInfo
 import android.content.res.Configuration
 import android.view.ViewGroup
 import android.widget.FrameLayout
+import androidx.activity.compose.BackHandler
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
@@ -50,7 +51,6 @@ private val DeepBlack = Color(0xFF0C0C0C)
 private val PrimaryAccent = Color(0xFF3F51B5) // Indigo
 
 @androidx.annotation.OptIn(UnstableApi::class)
-@OptIn(UnstableApi::class)
 @Composable
 fun VideoPlayerScreen(
     viewModel: MobilePlayerViewModel,
@@ -80,6 +80,8 @@ fun VideoPlayerScreen(
     var activeGesture by remember { mutableStateOf<GestureType?>(null) }
     
     val scope = rememberCoroutineScope()
+
+    BackHandler(onBack = onBackPressed)
 
     LaunchedEffect(brightness) {
         val activity = context as? Activity
