@@ -54,6 +54,7 @@ import coil.compose.AsyncImage
 import com.mplayer.videoplayer.R
 import com.mplayer.videoplayer.core.model.VideoMediaItem
 import com.mplayer.videoplayer.tv.viewmodel.TvBrowseViewModel
+import kotlinx.coroutines.delay
 
 private val TvBackground = Color(0xFF080A0F)
 private val ShelfTitle = Color(0xFFF4F6FA)
@@ -71,7 +72,8 @@ fun TvBrowseScreen(
 
     LaunchedEffect(videos.isNotEmpty()) {
         if (videos.isNotEmpty()) {
-            firstItemFocusRequester.requestFocus()
+            delay(120)
+            runCatching { firstItemFocusRequester.requestFocus() }
         }
     }
 

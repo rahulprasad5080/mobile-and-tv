@@ -207,6 +207,11 @@ class MainActivity : ComponentActivity() {
         return ContextCompat.checkSelfPermission(this, videoPermission()) == PackageManager.PERMISSION_GRANTED
     }
 
+    private fun supportsPictureInPicture(): Boolean {
+        return Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
+            packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)
+    }
+
     private fun isTelevisionDevice(): Boolean {
         val uiModeType = resources.configuration.uiMode and Configuration.UI_MODE_TYPE_MASK
         return uiModeType == Configuration.UI_MODE_TYPE_TELEVISION ||
@@ -374,16 +379,16 @@ class MainActivity : ComponentActivity() {
         val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
         if (!powerManager.isInteractive) return
 
-        if (isTelevisionDevice() && hasStartedTvPlayback && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+        if (isTelevisionDevice() && hasStartedTvPlayback && supportsPictureInPicture()) {
             val params = PictureInPictureParams.Builder()
                 .setAspectRatio(Rational(16, 9))
                 .build()
-            enterPictureInPictureMode(params)
+            runCatching { enterPictureInPictureMode(params) }
             return
         }
 
-        if (hasStartedMobilePlayback && playerViewModel.isPlaying.value && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            enterPictureInPictureMode(PictureInPictureParams.Builder().build())
+        if (hasStartedMobilePlayback && playerViewModel.isPlaying.value && supportsPictureInPicture()) {
+            runCatching { enterPictureInPictureMode(PictureInPictureParams.Builder().build()) }
         }
     }
 
