@@ -1,6 +1,8 @@
 package com.mplayer.videoplayer.tv.viewmodel
 
 import android.app.Application
+import android.content.Context
+import android.media.AudioManager
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.mplayer.videoplayer.core.model.AudioTrackInfo
@@ -17,9 +19,12 @@ import kotlinx.coroutines.launch
 class TvPlayerViewModel(application: Application) : AndroidViewModel(application) {
 
     val playerManager = PlayerManager(application)
+    private val audioManager = application.getSystemService(Context.AUDIO_SERVICE) as AudioManager
     private val progressRepository = PlaybackProgressRepository(application)
     private var currentVideo: VideoMediaItem? = null
+    private var playlist: List<VideoMediaItem> = emptyList()
     private var releaseJob: kotlinx.coroutines.Job? = null
+    private var volumeBeforeMute = 0.5f
 
     private val _isPlaying = MutableStateFlow(true)
     val isPlaying: StateFlow<Boolean> = _isPlaying.asStateFlow()
@@ -32,6 +37,18 @@ class TvPlayerViewModel(application: Application) : AndroidViewModel(application
 
     private val _currentTitle = MutableStateFlow("")
     val currentTitle: StateFlow<String> = _currentTitle.asStateFlow()
+
+    private val _volume = MutableStateFlow(0f)
+    val volume: StateFlow<Float> = _volume.asStateFlow()
+
+    private val _isMuted = MutableStateFlow(false)
+    val isMuted: StateFlow<Boolean> = _isMuted.asStateFlow()
+
+    private val _playbackSpeed = MutableStateFlow(1.0f)
+    val playbackSpeed: StateFlow<Float> = _playbackSpeed.asStateFlow()
+
+    private val _resizeMode = MutableStateFlow(0)
+    val resizeMode: StateFlow<Int> = _resizeMode.asStateFlow()
 
     private val _audioTracks = MutableStateFlow<List<AudioTrackInfo>>(emptyList())
     val audioTracks: StateFlow<List<AudioTrackInfo>> = _audioTracks.asStateFlow()
@@ -47,6 +64,13 @@ class TvPlayerViewModel(application: Application) : AndroidViewModel(application
                 _audioTracks.value = playerManager.getAudioTracks()
                 _subtitleTracks.value = playerManager.getSubtitleTracks()
             }
+        }
+
+        val maxVolume = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC).toFloat()
+        val currentVolume = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC).toFloat()
+        if (maxVolume > 0) {
+            _volume.value = currentVolume / maxVolume
+            _isMuted.value = currentVolume == 0f
         }
     }
 
@@ -66,15 +90,28 @@ class TvPlayerViewModel(application: Application) : AndroidViewModel(application
 
     fun playMedia(item: VideoMediaItem, startPositionMs: Long = 0) {
         releaseJob?.cancel()
+        currentVideo
+            ?.takeIf { it.id != item.id }
+            ?.let { progressRepository.saveProgress(it.id, playerManager.getPlayer()?.currentPosition ?: 0L) }
+        if (playlist.none { it.id == item.id }) {
+            playlist = listOf(item)
+        }
         currentVideo = item
         _currentTitle.value = item.title
+        _currentPosition.value = startPositionMs.coerceAtLeast(0)
+        _duration.value = 0L
         playerManager.playMedia(item, startPositionMs)
+        playerManager.getPlayer()?.setPlaybackSpeed(_playbackSpeed.value)
     }
 
     fun preloadMedia(item: VideoMediaItem, startPositionMs: Long = 0) {
         releaseJob?.cancel()
         _currentTitle.value = item.title
         playerManager.preloadMedia(item, startPositionMs)
+    }
+
+    fun setPlaylist(items: List<VideoMediaItem>, currentItem: VideoMediaItem) {
+        playlist = items.takeIf { list -> list.any { it.id == currentItem.id } } ?: listOf(currentItem)
     }
 
     fun togglePlayPause() {
@@ -93,6 +130,73 @@ class TvPlayerViewModel(application: Application) : AndroidViewModel(application
         val nextPosition = (player.currentPosition + deltaMs).coerceIn(0, duration)
         playerManager.seekTo(nextPosition)
         _currentPosition.value = nextPosition
+    }
+
+    fun seekTo(position: Long) {
+        val safePosition = position.coerceAtLeast(0)
+        playerManager.seekTo(safePosition)
+        _currentPosition.value = safePosition
+    }
+
+    fun playNext() {
+        playRelativeVideo(offset = 1)
+    }
+
+    fun playPrevious() {
+        playRelativeVideo(offset = -1)
+    }
+
+    private fun playRelativeVideo(offset: Int) {
+        val current = currentVideo ?: return
+        val items = playlist.takeIf { it.isNotEmpty() } ?: listOf(current)
+        val currentIndex = items.indexOfFirst { it.id == current.id }
+        if (currentIndex == -1) return
+
+        if (items.size == 1) {
+            if (offset < 0) {
+                seekTo(0L)
+            }
+            return
+        }
+
+        val nextIndex = (currentIndex + offset + items.size) % items.size
+        val nextVideo = items[nextIndex]
+        val startPosition = progressRepository.getProgress(nextVideo.id)
+        playMedia(nextVideo, startPosition)
+    }
+
+    fun setPlaybackSpeed(speed: Float) {
+        _playbackSpeed.value = speed
+        playerManager.getPlayer()?.setPlaybackSpeed(speed)
+    }
+
+    fun setResizeMode(mode: Int) {
+        _resizeMode.value = mode
+    }
+
+    fun adjustVolume(delta: Float) {
+        setVolume(_volume.value + delta)
+    }
+
+    fun setVolume(value: Float) {
+        val maxVolume = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC).toFloat()
+        if (maxVolume <= 0) return
+
+        val newVolumeFloat = value.coerceIn(0f, 1f)
+        _volume.value = newVolumeFloat
+        _isMuted.value = newVolumeFloat == 0f
+
+        val systemVolume = (newVolumeFloat * maxVolume).toInt()
+        audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, systemVolume, 0)
+    }
+
+    fun toggleMute() {
+        if (_isMuted.value) {
+            setVolume(volumeBeforeMute.takeIf { it > 0f } ?: 0.5f)
+        } else {
+            volumeBeforeMute = _volume.value.takeIf { it > 0f } ?: 0.5f
+            setVolume(0f)
+        }
     }
 
     fun selectAudioTrack(id: String) = playerManager.selectAudioTrack(id)

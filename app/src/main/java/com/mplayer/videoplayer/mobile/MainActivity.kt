@@ -337,6 +337,7 @@ class MainActivity : ComponentActivity() {
                     onVideoClick = { video ->
                         val progress = progressRepository.getProgress(video.id)
                         hasStartedTvPlayback = true
+                        tvPlayerViewModel.setPlaylist(tvBrowseViewModel.videos.value, video)
                         tvPlayerViewModel.playMedia(video, progress)
                         navController.navigate("tv_player")
                     }

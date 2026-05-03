@@ -20,6 +20,8 @@ import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -37,23 +39,33 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.AspectRatio
 import androidx.compose.material.icons.rounded.Audiotrack
 import androidx.compose.material.icons.rounded.FastForward
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Replay10
 import androidx.compose.material.icons.rounded.Settings
+import androidx.compose.material.icons.rounded.SkipNext
+import androidx.compose.material.icons.rounded.SkipPrevious
+import androidx.compose.material.icons.rounded.Speed
 import androidx.compose.material.icons.rounded.Subtitles
+import androidx.compose.material.icons.rounded.VolumeOff
+import androidx.compose.material.icons.rounded.VolumeUp
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -81,6 +93,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import com.mplayer.videoplayer.common.ui.player.SubtitleSize
 import com.mplayer.videoplayer.common.ui.player.applyNetflixSubtitleStyle
@@ -88,12 +101,9 @@ import com.mplayer.videoplayer.core.model.AudioTrackInfo
 import com.mplayer.videoplayer.core.model.SubtitleTrackInfo
 import com.mplayer.videoplayer.tv.viewmodel.TvPlayerViewModel
 import kotlinx.coroutines.delay
-import android.app.Activity
-import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.compose.ui.platform.LocalLifecycleOwner
-import androidx.compose.runtime.DisposableEffect
 
 private val TvOverlayBlack = Color.Black.copy(alpha = 0.62f)
 private val TvPanel = Color(0xFF111722)
@@ -111,10 +121,15 @@ fun TvPlayerScreen(
     val currentPosition by viewModel.currentPosition.collectAsState()
     val duration by viewModel.duration.collectAsState()
     val currentTitle by viewModel.currentTitle.collectAsState()
+    val volume by viewModel.volume.collectAsState()
+    val isMuted by viewModel.isMuted.collectAsState()
+    val playbackSpeed by viewModel.playbackSpeed.collectAsState()
+    val resizeMode by viewModel.resizeMode.collectAsState()
     val audioTracks by viewModel.audioTracks.collectAsState()
     val subtitleTracks by viewModel.subtitleTracks.collectAsState()
     var showControls by remember { mutableStateOf(true) }
-    var showTrackSelection by remember { mutableStateOf(false) }
+    var showSettings by remember { mutableStateOf(false) }
+    var isNightMode by remember { mutableStateOf(false) }
     var subtitleSize by remember { mutableStateOf(SubtitleSize.Medium) }
     val playFocusRequester = remember { FocusRequester() }
 
@@ -144,8 +159,8 @@ fun TvPlayerScreen(
     }
 
     BackHandler {
-        if (showTrackSelection) {
-            showTrackSelection = false
+        if (showSettings) {
+            showSettings = false
         } else if (showControls) {
             showControls = false
         } else {
@@ -153,8 +168,8 @@ fun TvPlayerScreen(
         }
     }
 
-    LaunchedEffect(showControls, showTrackSelection, isPlaying, currentPosition) {
-        if (showControls && !showTrackSelection && isPlaying) {
+    LaunchedEffect(showControls, showSettings, isPlaying, currentPosition) {
+        if (showControls && !showSettings && isPlaying) {
             delay(4_000)
             showControls = false
         }
@@ -221,6 +236,7 @@ fun TvPlayerScreen(
             },
             update = { view ->
                 view.player = player
+                view.resizeMode = resizeMode
                 view.applyNetflixSubtitleStyle(subtitleSize, isTv = true)
             },
             modifier = Modifier.fillMaxSize()
@@ -255,7 +271,7 @@ fun TvPlayerScreen(
             TvPlayerTopBar(
                 title = currentTitle.ifBlank { "Now Playing" },
                 onBackPressed = onBackPressed,
-                onTracksClick = { showTrackSelection = true }
+                onSettingsClick = { showSettings = true }
             )
         }
 
@@ -268,6 +284,10 @@ fun TvPlayerScreen(
             TvCenterControls(
                 isPlaying = isPlaying,
                 playFocusRequester = playFocusRequester,
+                onPrevious = {
+                    viewModel.playPrevious()
+                    showControls = true
+                },
                 onRewind = {
                     viewModel.seekBy(-10_000)
                     showControls = true
@@ -278,6 +298,10 @@ fun TvPlayerScreen(
                 },
                 onForward = {
                     viewModel.seekBy(10_000)
+                    showControls = true
+                },
+                onNext = {
+                    viewModel.playNext()
                     showControls = true
                 }
             )
@@ -291,17 +315,34 @@ fun TvPlayerScreen(
         ) {
             TvProgressBar(
                 currentPosition = currentPosition,
-                duration = duration
+                duration = duration,
+                onSeekTo = {
+                    viewModel.seekTo(it)
+                    showControls = true
+                }
+            )
+        }
+
+        if (isNightMode) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.28f))
             )
         }
     }
 
-    if (showTrackSelection) {
-        TvTrackSelectionDialog(
-            onDismiss = { showTrackSelection = false },
+    if (showSettings) {
+        TvPlayerSettingsDialog(
+            onDismiss = { showSettings = false },
             audioTracks = audioTracks,
             subtitleTracks = subtitleTracks,
             selectedSubtitleSize = subtitleSize,
+            playbackSpeed = playbackSpeed,
+            resizeMode = resizeMode,
+            volume = volume,
+            isMuted = isMuted,
+            isNightMode = isNightMode,
             onAudioSelect = {
                 viewModel.selectAudioTrack(it)
                 showControls = true
@@ -313,6 +354,26 @@ fun TvPlayerScreen(
             onSubtitleSizeChange = {
                 subtitleSize = it
                 showControls = true
+            },
+            onSpeedChange = {
+                viewModel.setPlaybackSpeed(it)
+                showControls = true
+            },
+            onResizeModeChange = {
+                viewModel.setResizeMode(it)
+                showControls = true
+            },
+            onVolumeChange = {
+                viewModel.setVolume(it)
+                showControls = true
+            },
+            onMuteToggle = {
+                viewModel.toggleMute()
+                showControls = true
+            },
+            onNightToggle = {
+                isNightMode = !isNightMode
+                showControls = true
             }
         )
     }
@@ -322,7 +383,7 @@ fun TvPlayerScreen(
 private fun TvPlayerTopBar(
     title: String,
     onBackPressed: () -> Unit,
-    onTracksClick: () -> Unit
+    onSettingsClick: () -> Unit
 ) {
     Row(
         modifier = Modifier
@@ -352,13 +413,13 @@ private fun TvPlayerTopBar(
         )
 
         Button(
-            onClick = onTracksClick,
+            onClick = onSettingsClick,
             colors = ButtonDefaults.buttonColors(containerColor = TvAccent),
             contentPadding = PaddingValues(horizontal = 24.dp, vertical = 14.dp)
         ) {
             Icon(Icons.Rounded.Settings, contentDescription = null, modifier = Modifier.size(24.dp))
             Spacer(modifier = Modifier.width(10.dp))
-            Text("Audio & Subtitles", style = MaterialTheme.typography.titleMedium)
+            Text("Settings", style = MaterialTheme.typography.titleMedium)
         }
     }
 }
@@ -367,14 +428,22 @@ private fun TvPlayerTopBar(
 private fun TvCenterControls(
     isPlaying: Boolean,
     playFocusRequester: FocusRequester,
+    onPrevious: () -> Unit,
     onRewind: () -> Unit,
     onPlayPause: () -> Unit,
-    onForward: () -> Unit
+    onForward: () -> Unit,
+    onNext: () -> Unit
 ) {
     Row(
-        horizontalArrangement = Arrangement.spacedBy(36.dp),
+        horizontalArrangement = Arrangement.spacedBy(26.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
+        TvRoundControlButton(
+            icon = Icons.Rounded.SkipPrevious,
+            contentDescription = "Previous video",
+            size = 74.dp,
+            onClick = onPrevious
+        )
         TvRoundControlButton(
             icon = Icons.Rounded.Replay10,
             contentDescription = "Rewind 10 seconds",
@@ -394,6 +463,12 @@ private fun TvCenterControls(
             contentDescription = "Forward 10 seconds",
             size = 86.dp,
             onClick = onForward
+        )
+        TvRoundControlButton(
+            icon = Icons.Rounded.SkipNext,
+            contentDescription = "Next video",
+            size = 74.dp,
+            onClick = onNext
         )
     }
 }
@@ -452,21 +527,33 @@ private fun TvRoundControlButton(
 @Composable
 private fun TvProgressBar(
     currentPosition: Long,
-    duration: Long
+    duration: Long,
+    onSeekTo: (Long) -> Unit
 ) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .padding(start = 72.dp, end = 72.dp, bottom = 54.dp)
     ) {
-        LinearProgressIndicator(
-            progress = { if (duration > 0) currentPosition.toFloat() / duration else 0f },
+        Slider(
+            value = if (duration > 0) {
+                (currentPosition.toFloat() / duration).coerceIn(0f, 1f)
+            } else {
+                0f
+            },
+            onValueChange = { progress ->
+                if (duration > 0) {
+                    onSeekTo((progress * duration).toLong())
+                }
+            },
             modifier = Modifier
                 .fillMaxWidth()
-                .height(8.dp)
-                .clip(RoundedCornerShape(8.dp)),
-            color = TvAccent,
-            trackColor = Color.White.copy(alpha = 0.24f)
+                .height(34.dp),
+            colors = SliderDefaults.colors(
+                thumbColor = TvAccent,
+                activeTrackColor = TvAccent,
+                inactiveTrackColor = Color.White.copy(alpha = 0.24f)
+            )
         )
         Row(
             modifier = Modifier
@@ -480,15 +567,26 @@ private fun TvProgressBar(
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun TvTrackSelectionDialog(
+private fun TvPlayerSettingsDialog(
     onDismiss: () -> Unit,
     audioTracks: List<AudioTrackInfo>,
     subtitleTracks: List<SubtitleTrackInfo>,
     selectedSubtitleSize: SubtitleSize,
+    playbackSpeed: Float,
+    resizeMode: Int,
+    volume: Float,
+    isMuted: Boolean,
+    isNightMode: Boolean,
     onAudioSelect: (String) -> Unit,
     onSubtitleSelect: (String?) -> Unit,
-    onSubtitleSizeChange: (SubtitleSize) -> Unit
+    onSubtitleSizeChange: (SubtitleSize) -> Unit,
+    onSpeedChange: (Float) -> Unit,
+    onResizeModeChange: (Int) -> Unit,
+    onVolumeChange: (Float) -> Unit,
+    onMuteToggle: () -> Unit,
+    onNightToggle: () -> Unit
 ) {
     BackHandler(onBack = onDismiss)
 
@@ -515,7 +613,7 @@ private fun TvTrackSelectionDialog(
             ) {
                 item {
                     Text(
-                        text = "Audio & Subtitles",
+                        text = "Player Settings",
                         style = MaterialTheme.typography.headlineMedium,
                         color = Color.White,
                         fontWeight = FontWeight.ExtraBold
@@ -524,6 +622,66 @@ private fun TvTrackSelectionDialog(
                 }
 
                 item {
+                    DialogSectionHeader(icon = Icons.Rounded.Speed, title = "Playback Speed")
+                    Spacer(modifier = Modifier.height(10.dp))
+                    TvOptionFlow {
+                        playbackSpeedOptions.forEach { speed ->
+                            TvSettingsChip(
+                                label = if (speed == 1.0f) "Normal" else "${speed}x",
+                                selected = playbackSpeed == speed,
+                                onClick = { onSpeedChange(speed) }
+                            )
+                        }
+                    }
+                }
+
+                item {
+                    Spacer(modifier = Modifier.height(16.dp))
+                    DialogSectionHeader(icon = Icons.Rounded.AspectRatio, title = "Aspect Ratio")
+                    Spacer(modifier = Modifier.height(10.dp))
+                    TvOptionFlow {
+                        resizeModeOptions.forEach { (mode, label) ->
+                            TvSettingsChip(
+                                label = label,
+                                selected = resizeMode == mode,
+                                onClick = { onResizeModeChange(mode) }
+                            )
+                        }
+                    }
+                }
+
+                item {
+                    Spacer(modifier = Modifier.height(16.dp))
+                    DialogSectionHeader(
+                        icon = if (isMuted) Icons.Rounded.VolumeOff else Icons.Rounded.VolumeUp,
+                        title = "Volume"
+                    )
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Slider(
+                        value = volume,
+                        onValueChange = onVolumeChange,
+                        colors = SliderDefaults.colors(
+                            thumbColor = TvAccent,
+                            activeTrackColor = TvAccent,
+                            inactiveTrackColor = Color.White.copy(alpha = 0.18f)
+                        )
+                    )
+                    TvOptionFlow {
+                        TvSettingsChip(
+                            label = if (isMuted) "Unmute" else "Mute",
+                            selected = isMuted,
+                            onClick = onMuteToggle
+                        )
+                        TvSettingsChip(
+                            label = "Night Mode",
+                            selected = isNightMode,
+                            onClick = onNightToggle
+                        )
+                    }
+                }
+
+                item {
+                    Spacer(modifier = Modifier.height(16.dp))
                     DialogSectionHeader(icon = Icons.Rounded.Audiotrack, title = "Audio Tracks")
                 }
 
@@ -562,12 +720,7 @@ private fun TvTrackSelectionDialog(
 
                 item {
                     Spacer(modifier = Modifier.height(18.dp))
-                    Text(
-                        text = "Subtitle Size",
-                        style = MaterialTheme.typography.titleLarge,
-                        color = Color.White,
-                        fontWeight = FontWeight.Bold
-                    )
+                    DialogSectionHeader(icon = Icons.Rounded.Subtitles, title = "Subtitle Size")
                 }
 
                 items(SubtitleSize.entries, key = { it.name }) { size ->
@@ -615,6 +768,57 @@ private fun DialogHint(text: String) {
         style = MaterialTheme.typography.titleMedium,
         color = TvMuted,
         modifier = Modifier.padding(vertical = 10.dp)
+    )
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun TvOptionFlow(content: @Composable () -> Unit) {
+    FlowRow(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        content()
+    }
+}
+
+@Composable
+private fun TvSettingsChip(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit
+) {
+    var isFocused by remember { mutableStateOf(false) }
+    FilterChip(
+        selected = selected,
+        onClick = onClick,
+        label = {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = if (selected) FontWeight.Bold else FontWeight.SemiBold
+            )
+        },
+        colors = FilterChipDefaults.filterChipColors(
+            selectedContainerColor = TvAccent,
+            selectedLabelColor = Color.White,
+            containerColor = if (isFocused) TvPanelLight else Color.White.copy(alpha = 0.06f),
+            labelColor = Color.White
+        ),
+        border = FilterChipDefaults.filterChipBorder(
+            enabled = true,
+            selected = selected,
+            borderColor = if (isFocused) Color.White else Color.White.copy(alpha = 0.12f),
+            selectedBorderColor = Color.White.copy(alpha = 0.22f),
+            borderWidth = if (isFocused) 3.dp else 1.dp,
+            selectedBorderWidth = if (isFocused) 3.dp else 1.dp
+        ),
+        shape = RoundedCornerShape(14.dp),
+        modifier = Modifier
+            .heightIn(min = 52.dp)
+            .onFocusChanged { isFocused = it.isFocused }
+            .focusable()
     )
 }
 
@@ -678,6 +882,16 @@ private fun TvTrackOption(
         }
     }
 }
+
+private val playbackSpeedOptions = listOf(0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 2.0f, 3.0f)
+
+private val resizeModeOptions: List<Pair<Int, String>> = listOf(
+    AspectRatioFrameLayout.RESIZE_MODE_FIXED_WIDTH to "Original",
+    AspectRatioFrameLayout.RESIZE_MODE_FIT to "Fit",
+    AspectRatioFrameLayout.RESIZE_MODE_FIXED_HEIGHT to "Fill",
+    AspectRatioFrameLayout.RESIZE_MODE_ZOOM to "Zoom",
+    AspectRatioFrameLayout.RESIZE_MODE_FILL to "Stretch"
+)
 
 private fun formatTime(ms: Long): String {
     val safeMs = ms.coerceAtLeast(0)
