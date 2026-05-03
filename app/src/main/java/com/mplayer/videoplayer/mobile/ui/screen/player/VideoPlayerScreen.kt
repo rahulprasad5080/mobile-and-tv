@@ -52,6 +52,7 @@ import androidx.compose.ui.platform.LocalLifecycleOwner
 private val TransparentBlack = Color.Black.copy(alpha = 0.5f)
 private val DeepBlack = Color(0xFF0C0C0C)
 private val PrimaryAccent = Color(0xFF3F51B5) // Indigo
+private val PlaybackGreen = Color(0xFF20B33A)
 
 @androidx.annotation.OptIn(UnstableApi::class)
 @Composable
@@ -430,103 +431,49 @@ fun VideoPlayerScreen(
                 }
             }
 
-            // 3. Middle Controls
-            AnimatedVisibility(
-                visible = showControls,
-                enter = fadeIn() + scaleIn(initialScale = 0.8f),
-                exit = fadeOut() + scaleOut(targetScale = 0.8f),
-                modifier = Modifier.align(Alignment.Center)
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(28.dp)
-                ) {
-                    IconButton(
-                        onClick = { 
-                            viewModel.seekTo(currentPosition - 10000)
-                            viewModel.resetHideTimer()
-                        },
-                        modifier = Modifier.size(52.dp).background(TransparentBlack, CircleShape)
-                    ) {
-                        Icon(Icons.Rounded.Replay10, contentDescription = "Rewind", tint = Color.White, modifier = Modifier.size(28.dp))
-                    }
-
-                    Box(
-                        modifier = Modifier
-                            .size(76.dp)
-                            .clip(CircleShape)
-                            .background(PrimaryAccent.copy(alpha = 0.8f))
-                            .clickable { 
-                                viewModel.togglePlayPause()
-                                viewModel.resetHideTimer()
-                            },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            if (isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
-                            contentDescription = "Play/Pause",
-                            tint = Color.White,
-                            modifier = Modifier.size(44.dp)
-                        )
-                    }
-
-                    IconButton(
-                        onClick = { 
-                            viewModel.seekTo(currentPosition + 10000)
-                            viewModel.resetHideTimer()
-                        },
-                        modifier = Modifier.size(52.dp).background(TransparentBlack, CircleShape)
-                    ) {
-                        Icon(Icons.Rounded.Forward10, contentDescription = "Fast Forward", tint = Color.White, modifier = Modifier.size(28.dp))
-                    }
-                }
-            }
-
-            // 4. Bottom Bar
+            // 3. Bottom playback controls
             AnimatedVisibility(
                 visible = showControls,
                 enter = fadeIn() + slideInVertically { it },
                 exit = fadeOut() + slideOutVertically { it },
                 modifier = Modifier.align(Alignment.BottomCenter)
             ) {
-                Column(
-                    modifier = Modifier
-                        .padding(bottom = 24.dp, start = 20.dp, end = 20.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = formatTime(currentPosition), 
-                            color = Color.White, 
-                            style = MaterialTheme.typography.labelLarge,
-                            fontWeight = FontWeight.Bold
-                        )
-                        
-                        Slider(
-                            value = if (duration > 0) currentPosition.toFloat() / duration else 0f,
-                            onValueChange = { 
-                                viewModel.seekTo((it * duration).toLong())
-                                viewModel.resetHideTimer()
-                            },
-                            modifier = Modifier.weight(1f).padding(horizontal = 12.dp),
-                            colors = SliderDefaults.colors(
-                                thumbColor = PrimaryAccent,
-                                activeTrackColor = PrimaryAccent,
-                                inactiveTrackColor = Color.White.copy(alpha = 0.3f)
-                            )
-                        )
-                        
-                        Text(
-                            text = formatTime(duration), 
-                            color = Color.White, 
-                            style = MaterialTheme.typography.labelLarge,
-                            fontWeight = FontWeight.Bold
-                        )
+                BottomPlaybackControls(
+                    isPlaying = isPlaying,
+                    currentPosition = currentPosition,
+                    duration = duration,
+                    onLockClick = {
+                        viewModel.toggleLock()
+                    },
+                    onSeekTo = {
+                        viewModel.seekTo(it)
+                        viewModel.resetHideTimer()
+                    },
+                    onRewindClick = {
+                        viewModel.seekTo((currentPosition - 10000).coerceAtLeast(0L))
+                        viewModel.resetHideTimer()
+                    },
+                    onPreviousClick = {
+                        viewModel.seekTo(0L)
+                        viewModel.resetHideTimer()
+                    },
+                    onPlayPauseClick = {
+                        viewModel.togglePlayPause()
+                        viewModel.resetHideTimer()
+                    },
+                    onNextClick = {
+                        viewModel.seekTo(duration)
+                        viewModel.resetHideTimer()
+                    },
+                    onForwardClick = {
+                        viewModel.seekTo((currentPosition + 10000).coerceAtMost(duration))
+                        viewModel.resetHideTimer()
+                    },
+                    onFullscreenClick = {
+                        viewModel.toggleOrientation()
+                        viewModel.resetHideTimer()
                     }
-                }
+                )
             }
         } else {
             // Locked State UI
@@ -607,6 +554,149 @@ fun VideoPlayerScreen(
                 showSubtitleDialog = false
             },
             onDismiss = { showSubtitleDialog = false }
+        )
+    }
+}
+
+@Composable
+fun BottomPlaybackControls(
+    isPlaying: Boolean,
+    currentPosition: Long,
+    duration: Long,
+    onLockClick: () -> Unit,
+    onSeekTo: (Long) -> Unit,
+    onRewindClick: () -> Unit,
+    onPreviousClick: () -> Unit,
+    onPlayPauseClick: () -> Unit,
+    onNextClick: () -> Unit,
+    onForwardClick: () -> Unit,
+    onFullscreenClick: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .navigationBarsPadding()
+            .padding(start = 10.dp, end = 10.dp, bottom = 8.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            PlaybackTimeText(formatTime(currentPosition))
+            Slider(
+                value = if (duration > 0) {
+                    (currentPosition.toFloat() / duration).coerceIn(0f, 1f)
+                } else {
+                    0f
+                },
+                onValueChange = { progress ->
+                    if (duration > 0) {
+                        onSeekTo((progress * duration).toLong())
+                    }
+                },
+                modifier = Modifier
+                    .weight(1f)
+                    .height(28.dp)
+                    .padding(horizontal = 8.dp),
+                colors = SliderDefaults.colors(
+                    thumbColor = PlaybackGreen,
+                    activeTrackColor = PlaybackGreen,
+                    inactiveTrackColor = Color.White.copy(alpha = 0.48f)
+                )
+            )
+            PlaybackTimeText(formatTime(duration))
+        }
+
+        Spacer(modifier = Modifier.height(4.dp))
+
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(58.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            BottomControlButton(
+                icon = Icons.Rounded.Lock,
+                contentDescription = "Lock",
+                onClick = onLockClick
+            )
+            BottomControlButton(
+                icon = Icons.Rounded.Replay10,
+                contentDescription = "Rewind 10 seconds",
+                onClick = onRewindClick
+            )
+            BottomControlButton(
+                icon = Icons.Rounded.SkipPrevious,
+                contentDescription = "Previous",
+                onClick = onPreviousClick
+            )
+            BottomPlayPauseButton(
+                isPlaying = isPlaying,
+                onClick = onPlayPauseClick
+            )
+            BottomControlButton(
+                icon = Icons.Rounded.SkipNext,
+                contentDescription = "Next",
+                onClick = onNextClick
+            )
+            BottomControlButton(
+                icon = Icons.Rounded.Forward10,
+                contentDescription = "Forward 10 seconds",
+                onClick = onForwardClick
+            )
+            BottomControlButton(
+                icon = Icons.Rounded.Fullscreen,
+                contentDescription = "Fullscreen",
+                onClick = onFullscreenClick
+            )
+        }
+    }
+}
+
+@Composable
+private fun PlaybackTimeText(text: String) {
+    Text(
+        text = text,
+        color = Color.White,
+        fontSize = 15.sp,
+        fontWeight = FontWeight.Medium
+    )
+}
+
+@Composable
+private fun BottomControlButton(
+    icon: ImageVector,
+    contentDescription: String,
+    onClick: () -> Unit
+) {
+    IconButton(
+        onClick = onClick,
+        modifier = Modifier.size(42.dp)
+    ) {
+        Icon(
+            icon,
+            contentDescription = contentDescription,
+            tint = Color.White,
+            modifier = Modifier.size(31.dp)
+        )
+    }
+}
+
+@Composable
+private fun BottomPlayPauseButton(
+    isPlaying: Boolean,
+    onClick: () -> Unit
+) {
+    IconButton(
+        onClick = onClick,
+        modifier = Modifier.size(58.dp)
+    ) {
+        Icon(
+            if (isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
+            contentDescription = "Play/Pause",
+            tint = Color.White,
+            modifier = Modifier.size(52.dp)
         )
     }
 }
