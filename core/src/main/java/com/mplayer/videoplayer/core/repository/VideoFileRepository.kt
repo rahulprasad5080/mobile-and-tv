@@ -12,10 +12,7 @@ import android.provider.OpenableColumns
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
-import java.io.FileInputStream
 import java.io.FileOutputStream
-import java.io.InputStream
-import java.io.OutputStream
 
 class VideoFileRepository {
 
@@ -66,11 +63,19 @@ class VideoFileRepository {
 
     suspend fun copyVideoToFolder(context: Context, sourceUri: Uri, targetFolder: File): Boolean {
         return withContext(Dispatchers.IO) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                return@withContext copyVideoToMediaStore(context, sourceUri, targetFolder)
+            }
+
             try {
                 val sourceName = getFileNameFromUri(context, sourceUri) ?: "video_${System.currentTimeMillis()}.mp4"
-                val targetFile = File(targetFolder, sourceName)
+                if (!targetFolder.exists()) {
+                    targetFolder.mkdirs()
+                }
+                val targetFile = uniqueTargetFile(targetFolder, sourceName)
                 
-                context.contentResolver.openInputStream(sourceUri)?.use { input ->
+                val inputStream = context.contentResolver.openInputStream(sourceUri) ?: return@withContext false
+                inputStream.use { input ->
                     FileOutputStream(targetFile).use { output ->
                         input.copyTo(output)
                     }
@@ -82,6 +87,41 @@ class VideoFileRepository {
                 e.printStackTrace()
                 false
             }
+        }
+    }
+
+    private fun copyVideoToMediaStore(context: Context, sourceUri: Uri, targetFolder: File): Boolean {
+        val resolver = context.contentResolver
+        val sourceName = getFileNameFromUri(context, sourceUri) ?: "video_${System.currentTimeMillis()}.mp4"
+        val relativePath = relativeMediaPath(targetFolder)
+        val targetName = uniqueMediaStoreName(context, relativePath, sourceName)
+        val mimeType = resolver.getType(sourceUri) ?: "video/mp4"
+
+        val values = ContentValues().apply {
+            put(MediaStore.Video.Media.DISPLAY_NAME, targetName)
+            put(MediaStore.Video.Media.MIME_TYPE, mimeType)
+            put(MediaStore.Video.Media.RELATIVE_PATH, relativePath)
+            put(MediaStore.Video.Media.IS_PENDING, 1)
+        }
+
+        val targetUri = resolver.insert(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, values) ?: return false
+        return try {
+            val inputStream = resolver.openInputStream(sourceUri) ?: error("Unable to open source video")
+            inputStream.use { input ->
+                val outputStream = resolver.openOutputStream(targetUri) ?: error("Unable to open target video")
+                outputStream.use { output ->
+                    input.copyTo(output)
+                }
+            }
+
+            values.clear()
+            values.put(MediaStore.Video.Media.IS_PENDING, 0)
+            resolver.update(targetUri, values, null, null)
+            true
+        } catch (e: Exception) {
+            resolver.delete(targetUri, null, null)
+            e.printStackTrace()
+            false
         }
     }
 
@@ -105,5 +145,66 @@ class VideoFileRepository {
             }
         }
         return uri.lastPathSegment
+    }
+
+    private fun uniqueTargetFile(targetFolder: File, sourceName: String): File {
+        val dotIndex = sourceName.lastIndexOf('.')
+        val baseName = if (dotIndex > 0) sourceName.substring(0, dotIndex) else sourceName
+        val extension = if (dotIndex > 0) sourceName.substring(dotIndex) else ""
+        var candidate = File(targetFolder, sourceName)
+        var index = 1
+
+        while (candidate.exists()) {
+            candidate = File(targetFolder, "$baseName ($index)$extension")
+            index++
+        }
+
+        return candidate
+    }
+
+    private fun relativeMediaPath(targetFolder: File): String {
+        val normalizedPath = targetFolder.absolutePath.replace('\\', '/').trimEnd('/')
+        val storageMarker = "/storage/emulated/0/"
+        val relativePath = if (normalizedPath.startsWith(storageMarker)) {
+            normalizedPath.removePrefix(storageMarker)
+        } else {
+            targetFolder.name
+        }
+        return relativePath.trim('/').ifBlank { "Movies" } + "/"
+    }
+
+    private fun uniqueMediaStoreName(context: Context, relativePath: String, sourceName: String): String {
+        val existingNames = mutableSetOf<String>()
+        val projection = arrayOf(MediaStore.Video.Media.DISPLAY_NAME)
+        val selection = "${MediaStore.Video.Media.RELATIVE_PATH} = ?"
+        val selectionArgs = arrayOf(relativePath)
+
+        context.contentResolver.query(
+            MediaStore.Video.Media.EXTERNAL_CONTENT_URI,
+            projection,
+            selection,
+            selectionArgs,
+            null
+        )?.use { cursor ->
+            val nameIndex = cursor.getColumnIndex(MediaStore.Video.Media.DISPLAY_NAME)
+            while (cursor.moveToNext() && nameIndex != -1) {
+                cursor.getString(nameIndex)?.let { existingNames += it }
+            }
+        }
+
+        if (sourceName !in existingNames) return sourceName
+
+        val dotIndex = sourceName.lastIndexOf('.')
+        val baseName = if (dotIndex > 0) sourceName.substring(0, dotIndex) else sourceName
+        val extension = if (dotIndex > 0) sourceName.substring(dotIndex) else ""
+        var index = 1
+        var candidate: String
+
+        do {
+            candidate = "$baseName ($index)$extension"
+            index++
+        } while (candidate in existingNames)
+
+        return candidate
     }
 }

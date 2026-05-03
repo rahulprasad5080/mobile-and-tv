@@ -226,6 +226,57 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun copyVideosToFolder(videos: List<VideoMediaItem>, targetFolderPath: String?) {
+        if (videos.isEmpty() || targetFolderPath == null) return
+
+        viewModelScope.launch {
+            val targetFolder = File(targetFolderPath)
+            var copiedAny = false
+            videos.forEach { video ->
+                val success = fileRepository.copyVideoToFolder(
+                    getApplication(),
+                    video.uri,
+                    targetFolder
+                )
+                copiedAny = copiedAny || success
+            }
+            if (copiedAny) {
+                loadVideos()
+            }
+        }
+    }
+
+    fun moveVideosToFolder(videos: List<VideoMediaItem>, targetFolderPath: String?) {
+        if (videos.isEmpty() || targetFolderPath == null) return
+
+        viewModelScope.launch {
+            val targetFolder = File(targetFolderPath)
+            val movedIds = mutableListOf<String>()
+            videos.forEach { video ->
+                val copied = fileRepository.copyVideoToFolder(
+                    getApplication(),
+                    video.uri,
+                    targetFolder
+                )
+                if (copied) {
+                    movedIds += video.id
+                    _deletedIds.value = _deletedIds.value + video.id
+                    try {
+                        val intentSender = fileRepository.deleteVideo(getApplication(), video.uri)
+                        if (intentSender != null) {
+                            _pendingIntent.value = intentSender
+                        }
+                    } catch (e: Exception) {
+                        _deletedIds.value = _deletedIds.value - video.id
+                    }
+                }
+            }
+            if (movedIds.isNotEmpty()) {
+                loadVideos()
+            }
+        }
+    }
+
     fun clearPendingIntent() {
         _pendingIntent.value = null
     }

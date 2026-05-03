@@ -272,9 +272,13 @@ class MainActivity : ComponentActivity() {
             composable("folder_videos") {
                 val groupedVideos by homeViewModel.groupedVideos.collectAsState()
                 val folderVideos = groupedVideos[selectedFolderName] ?: emptyList()
+                val folderDestinations = groupedVideos.map { (name, videos) ->
+                    name to videos.firstOrNull()?.filePath?.let { java.io.File(it).parent }
+                }
                 FolderVideosScreen(
                     folderName = selectedFolderName,
                     videos = folderVideos,
+                    folderDestinations = folderDestinations,
                     onVideoClick = { video ->
                         homeViewModel.addToRecentlyPlayed(video)
                         val progress = progressRepository.getProgress(video.id)
@@ -285,6 +289,12 @@ class MainActivity : ComponentActivity() {
                     onRename = { video, newName -> homeViewModel.renameVideo(video, newName) },
                     onDelete = { video -> homeViewModel.deleteVideo(video) },
                     onCopy = { video -> homeViewModel.copyVideoToClipboard(video) },
+                    onCopySelected = { videos, targetPath ->
+                        homeViewModel.copyVideosToFolder(videos, targetPath)
+                    },
+                    onMoveSelected = { videos, targetPath ->
+                        homeViewModel.moveVideosToFolder(videos, targetPath)
+                    },
                     onPaste = { 
                         val path = folderVideos.firstOrNull()?.filePath?.let { java.io.File(it).parent }
                         homeViewModel.pasteVideo(selectedFolderName, path) 
