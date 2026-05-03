@@ -344,15 +344,6 @@ fun VideoPlayerScreen(
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         IconButton(
                             onClick = { 
-                                viewModel.toggleOrientation()
-                                viewModel.resetHideTimer()
-                            },
-                            modifier = Modifier.background(TransparentBlack, CircleShape)
-                        ) {
-                            Icon(Icons.Rounded.ScreenRotation, contentDescription = "Rotate", tint = Color.White)
-                        }
-                        IconButton(
-                            onClick = { 
                                 viewModel.toggleLock()
                                 viewModel.resetHideTimer()
                             },
@@ -515,9 +506,6 @@ fun VideoPlayerScreen(
             onResizeModeChange = { viewModel.setResizeMode(it) },
             audioTracks = audioTracks,
             onAudioTrackSelect = { viewModel.selectAudioTrack(it) },
-            subtitleTracks = subtitleTracks,
-            onSubtitleTrackSelect = { viewModel.selectSubtitleTrack(it) },
-            onRotateClick = { viewModel.toggleOrientation() },
             onSleepClick = { /* Sleep logic */ },
             onDismiss = { showSettings = false }
         )
@@ -564,9 +552,6 @@ fun AdvancedSettingsDialog(
     onResizeModeChange: (Int) -> Unit,
     audioTracks: List<AudioTrackInfo>,
     onAudioTrackSelect: (String) -> Unit,
-    subtitleTracks: List<SubtitleTrackInfo>,
-    onSubtitleTrackSelect: (String?) -> Unit,
-    onRotateClick: () -> Unit,
     onSleepClick: () -> Unit,
     onDismiss: () -> Unit
 ) {
@@ -617,9 +602,7 @@ fun AdvancedSettingsDialog(
                         Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
                             TracksSection(
                                 audioTracks = audioTracks,
-                                subtitleTracks = subtitleTracks,
-                                onAudioTrackSelect = onAudioTrackSelect,
-                                onSubtitleTrackSelect = onSubtitleTrackSelect
+                                onAudioTrackSelect = onAudioTrackSelect
                             )
                         }
                         Column(modifier = Modifier.weight(1f).padding(start = 12.dp)) {
@@ -631,9 +614,7 @@ fun AdvancedSettingsDialog(
                 } else {
                     TracksSection(
                         audioTracks = audioTracks,
-                        subtitleTracks = subtitleTracks,
-                        onAudioTrackSelect = onAudioTrackSelect,
-                        onSubtitleTrackSelect = onSubtitleTrackSelect
+                        onAudioTrackSelect = onAudioTrackSelect
                     )
                     HorizontalDivider(color = Color.White.copy(alpha = 0.1f), modifier = Modifier.padding(vertical = 16.dp))
                     PlaybackSection(currentSpeed, onSpeedChange)
@@ -649,9 +630,7 @@ fun AdvancedSettingsDialog(
 @Composable
 fun TracksSection(
     audioTracks: List<AudioTrackInfo>,
-    subtitleTracks: List<SubtitleTrackInfo>,
-    onAudioTrackSelect: (String) -> Unit,
-    onSubtitleTrackSelect: (String?) -> Unit
+    onAudioTrackSelect: (String) -> Unit
 ) {
     if (audioTracks.isNotEmpty()) {
         SettingsSectionHeader(Icons.Rounded.AudioFile, "Audio Tracks")
@@ -667,26 +646,6 @@ fun TracksSection(
                     onClick = { onAudioTrackSelect(track.id) }
                 )
             }
-        }
-    }
-
-    Spacer(modifier = Modifier.height(16.dp))
-    SettingsSectionHeader(Icons.Rounded.Subtitles, "Subtitle Tracks")
-    FlowRow(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        SettingsChip(
-            selected = subtitleTracks.none { it.isSelected },
-            label = "Off",
-            onClick = { onSubtitleTrackSelect(null) }
-        )
-        subtitleTracks.forEach { track ->
-            SettingsChip(
-                selected = track.isSelected,
-                label = track.displayLabel,
-                onClick = { onSubtitleTrackSelect(track.id) }
-            )
         }
     }
 }
