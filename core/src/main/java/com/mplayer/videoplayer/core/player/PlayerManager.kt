@@ -111,7 +111,7 @@ class PlayerManager(private val context: Context) {
         val mediaItem = MediaItem.Builder()
             .setMediaId(item.id)
             .setUri(item.uri)
-            .setMimeType(item.mimeType)
+            .setMimeType(item.mimeType.forPlayback())
             .setMediaMetadata(
                 MediaMetadata.Builder()
                     .setTitle(item.title)
@@ -143,7 +143,7 @@ class PlayerManager(private val context: Context) {
         val mediaItem = MediaItem.Builder()
             .setMediaId(item.id)
             .setUri(item.uri)
-            .setMimeType(item.mimeType)
+            .setMimeType(item.mimeType.forPlayback())
             .setMediaMetadata(
                 MediaMetadata.Builder()
                     .setTitle(item.title)
@@ -289,6 +289,15 @@ class PlayerManager(private val context: Context) {
         val baseLabel = label?.takeIf { it.isNotBlank() } ?: resolveLanguageName(language)
         val channelLabel = resolveChannelLabel(channelCount)
         return if (channelLabel != null) "$baseLabel ($channelLabel)" else baseLabel
+    }
+
+    private fun String?.forPlayback(): String? {
+        return this?.takeIf {
+            it.startsWith("video/", ignoreCase = true) ||
+                it.startsWith("audio/", ignoreCase = true) ||
+                it.startsWith("application/x-mpegURL", ignoreCase = true) ||
+                it.startsWith("application/dash+xml", ignoreCase = true)
+        }
     }
 
     private fun buildSubtitleTrackLabel(label: String?, language: String?): String {

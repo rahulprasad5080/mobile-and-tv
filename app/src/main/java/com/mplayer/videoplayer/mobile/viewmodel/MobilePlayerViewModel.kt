@@ -4,6 +4,7 @@ import android.app.Application
 import android.content.Context
 import android.content.pm.ActivityInfo
 import android.media.AudioManager
+import android.media.MediaMetadataRetriever
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.mplayer.videoplayer.core.model.AudioTrackInfo
@@ -11,6 +12,7 @@ import com.mplayer.videoplayer.core.model.SubtitleTrackInfo
 import com.mplayer.videoplayer.core.model.VideoMediaItem
 import com.mplayer.videoplayer.core.player.PlayerManager
 import com.mplayer.videoplayer.core.repository.PlaybackProgressRepository
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -44,6 +46,9 @@ class MobilePlayerViewModel(application: Application) : AndroidViewModel(applica
     private val _brightness = MutableStateFlow(0.5f)
     val brightness: StateFlow<Float> = _brightness.asStateFlow()
 
+    private val _isMuted = MutableStateFlow(false)
+    val isMuted: StateFlow<Boolean> = _isMuted.asStateFlow()
+
     private val _isLocked = MutableStateFlow(false)
     val isLocked: StateFlow<Boolean> = _isLocked.asStateFlow()
 
@@ -69,6 +74,8 @@ class MobilePlayerViewModel(application: Application) : AndroidViewModel(applica
 
     private var hideJob: Job? = null
     private var releaseJob: Job? = null
+    private var volumeBeforeMute = 0.5f
+    private var hasManualOrientationOverride = false
 
     init {
         playerManager.initializePlayer()
@@ -103,6 +110,8 @@ class MobilePlayerViewModel(application: Application) : AndroidViewModel(applica
     fun playMedia(item: VideoMediaItem, startPositionMs: Long = 0) {
         releaseJob?.cancel()
         currentVideo = item
+        hasManualOrientationOverride = false
+        applyDefaultOrientationForVideo(item)
         playerManager.playMedia(item, startPositionMs)
     }
 
@@ -142,19 +151,36 @@ class MobilePlayerViewModel(application: Application) : AndroidViewModel(applica
     }
 
     fun adjustVolume(delta: Float) {
+        setVolume(_volume.value + delta)
+    }
+
+    fun setVolume(value: Float) {
         val maxVolume = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC).toFloat()
         if (maxVolume <= 0) return
-        
-        val currentVolumeFloat = _volume.value
-        val newVolumeFloat = (currentVolumeFloat + delta).coerceIn(0f, 1f)
+
+        val newVolumeFloat = value.coerceIn(0f, 1f)
         _volume.value = newVolumeFloat
-        
+        _isMuted.value = newVolumeFloat == 0f
+
         val systemVolume = (newVolumeFloat * maxVolume).toInt()
         audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, systemVolume, 0)
     }
 
+    fun toggleMute() {
+        if (_isMuted.value) {
+            setVolume(volumeBeforeMute.takeIf { it > 0f } ?: 0.5f)
+        } else {
+            volumeBeforeMute = _volume.value.takeIf { it > 0f } ?: 0.5f
+            setVolume(0f)
+        }
+    }
+
     fun adjustBrightness(delta: Float) {
-        _brightness.value = (_brightness.value + delta).coerceIn(0f, 1f)
+        setBrightness(_brightness.value + delta)
+    }
+
+    fun setBrightness(value: Float) {
+        _brightness.value = value.coerceIn(0f, 1f)
     }
 
     fun toggleLock() {
@@ -174,10 +200,57 @@ class MobilePlayerViewModel(application: Application) : AndroidViewModel(applica
     }
 
     fun toggleOrientation() {
+        hasManualOrientationOverride = true
         _orientationMode.value = when (_orientationMode.value) {
             ActivityInfo.SCREEN_ORIENTATION_SENSOR -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
             ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE -> ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+            ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE -> ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+            ActivityInfo.SCREEN_ORIENTATION_REVERSE_LANDSCAPE -> ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+            ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT -> ActivityInfo.SCREEN_ORIENTATION_SENSOR
+            ActivityInfo.SCREEN_ORIENTATION_PORTRAIT -> ActivityInfo.SCREEN_ORIENTATION_SENSOR
+            ActivityInfo.SCREEN_ORIENTATION_REVERSE_PORTRAIT -> ActivityInfo.SCREEN_ORIENTATION_SENSOR
             else -> ActivityInfo.SCREEN_ORIENTATION_SENSOR
+        }
+    }
+
+    private fun applyDefaultOrientationForVideo(item: VideoMediaItem) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val orientation = resolveVideoOrientation(item)
+            if (!hasManualOrientationOverride && currentVideo?.id == item.id) {
+                _orientationMode.value = orientation
+            }
+        }
+    }
+
+    private fun resolveVideoOrientation(item: VideoMediaItem): Int {
+        val retriever = MediaMetadataRetriever()
+        return try {
+            retriever.setDataSource(getApplication(), item.uri)
+            val width = retriever
+                .extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH)
+                ?.toIntOrNull()
+                ?: return ActivityInfo.SCREEN_ORIENTATION_SENSOR
+            val height = retriever
+                .extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT)
+                ?.toIntOrNull()
+                ?: return ActivityInfo.SCREEN_ORIENTATION_SENSOR
+            val rotation = retriever
+                .extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_ROTATION)
+                ?.toIntOrNull()
+                ?: 0
+
+            val displayWidth = if (rotation == 90 || rotation == 270) height else width
+            val displayHeight = if (rotation == 90 || rotation == 270) width else height
+
+            when {
+                displayWidth > displayHeight -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+                displayHeight > displayWidth -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
+                else -> ActivityInfo.SCREEN_ORIENTATION_SENSOR
+            }
+        } catch (_: Exception) {
+            ActivityInfo.SCREEN_ORIENTATION_SENSOR
+        } finally {
+            retriever.release()
         }
     }
 

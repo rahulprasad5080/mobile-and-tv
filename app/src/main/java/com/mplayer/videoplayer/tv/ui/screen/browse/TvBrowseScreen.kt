@@ -94,8 +94,7 @@ fun TvBrowseScreen(
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(start = 72.dp, top = 56.dp, bottom = 72.dp),
-            verticalArrangement = Arrangement.spacedBy(22.dp),
-            clipToPadding = false
+            verticalArrangement = Arrangement.spacedBy(22.dp)
         ) {
             item {
                 TvHomeHeader(videoCount = videos.size)
@@ -177,8 +176,7 @@ private fun VideoShelf(
 
         LazyRow(
             contentPadding = PaddingValues(end = 72.dp, top = 12.dp, bottom = 12.dp),
-            horizontalArrangement = Arrangement.spacedBy(26.dp),
-            clipToPadding = false
+            horizontalArrangement = Arrangement.spacedBy(26.dp)
         ) {
             itemsIndexed(
                 items = videos,

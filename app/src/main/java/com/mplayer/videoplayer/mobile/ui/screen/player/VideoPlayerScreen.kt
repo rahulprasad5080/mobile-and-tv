@@ -1,22 +1,20 @@
 package com.mplayer.videoplayer.mobile.ui.screen.player
 
 import android.app.Activity
+import android.app.PictureInPictureParams
 import android.content.pm.ActivityInfo
 import android.content.res.Configuration
+import android.os.Build
+import android.util.Rational
 import android.view.ViewGroup
 import android.widget.FrameLayout
 import androidx.activity.compose.BackHandler
-import androidx.core.view.WindowCompat
-import androidx.core.view.WindowInsetsCompat
-import androidx.core.view.WindowInsetsControllerCompat
 import kotlin.OptIn
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.*
 import androidx.compose.foundation.gestures.detectDragGestures
-import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -69,6 +67,7 @@ fun VideoPlayerScreen(
     val duration by viewModel.duration.collectAsState()
     val volume by viewModel.volume.collectAsState()
     val brightness by viewModel.brightness.collectAsState()
+    val isMuted by viewModel.isMuted.collectAsState()
     val isLocked by viewModel.isLocked.collectAsState()
     val playbackSpeed by viewModel.playbackSpeed.collectAsState()
     val resizeMode by viewModel.resizeMode.collectAsState()
@@ -79,7 +78,10 @@ fun VideoPlayerScreen(
     val subtitleTracks by viewModel.subtitleTracks.collectAsState()
     
     var showSettings by remember { mutableStateOf(false) }
+    var showAudioDialog by remember { mutableStateOf(false) }
+    var showVolumeDialog by remember { mutableStateOf(false) }
     var showSubtitleDialog by remember { mutableStateOf(false) }
+    var isNightMode by remember { mutableStateOf(false) }
     var subtitleSize by remember { mutableStateOf(SubtitleSize.Medium) }
     var gestureInfo by remember { mutableStateOf<String?>(null) }
     var gestureIcon by remember { mutableStateOf<ImageVector?>(null) }
@@ -192,7 +194,7 @@ fun VideoPlayerScreen(
                                 gestureIcon = Icons.Rounded.VolumeUp
                             }
                         } else if (dragDirection == DragDirection.HORIZONTAL) {
-                            activeGesture = null // Ensure volume/brightness pills don't show
+                            activeGesture = null
                             val seekAmount = (dragAmount.x * 100).toLong()
                             viewModel.seekTo(currentPosition + seekAmount)
                             gestureInfo = formatTime(currentPosition)
@@ -247,7 +249,7 @@ fun VideoPlayerScreen(
         )
         
         if (!isInPipMode) {
-            // Gesture Feedback UI (Pill style for Brightness/Volume)
+            // Gesture Feedback UI
         Row(
             modifier = Modifier
                 .fillMaxSize()
@@ -255,7 +257,6 @@ fun VideoPlayerScreen(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Left Side: Brightness
             AnimatedVisibility(
                 visible = activeGesture == GestureType.BRIGHTNESS,
                 enter = fadeIn() + slideInHorizontally(),
@@ -348,46 +349,31 @@ fun VideoPlayerScreen(
                 exit = fadeOut() + slideOutVertically { -it },
                 modifier = Modifier.align(Alignment.TopCenter)
             ) {
-                Row(
+                Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(16.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                        .padding(start = 12.dp, top = 10.dp, end = 12.dp)
                 ) {
-                    IconButton(
-                        onClick = onBackPressed,
-                        modifier = Modifier.background(TransparentBlack, CircleShape)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(Icons.Rounded.ArrowBack, contentDescription = "Back", tint = Color.White)
-                    }
-                    
-                    Text(
-                        text = "Now Playing",
-                        color = Color.White,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
-                    )
-                    
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         IconButton(
-                            onClick = { 
-                                viewModel.toggleLock()
-                                viewModel.resetHideTimer()
-                            },
+                            onClick = onBackPressed,
                             modifier = Modifier.background(TransparentBlack, CircleShape)
                         ) {
-                            Icon(Icons.Rounded.LockOpen, contentDescription = "Lock", tint = Color.White)
+                            Icon(Icons.Rounded.ArrowBack, contentDescription = "Back", tint = Color.White)
                         }
-                        IconButton(
-                            onClick = { 
-                                showSubtitleDialog = true
-                                viewModel.resetHideTimer()
-                            },
-                            modifier = Modifier.background(TransparentBlack, CircleShape)
-                        ) {
-                            Icon(Icons.Rounded.Subtitles, contentDescription = "Subtitles", tint = Color.White)
-                        }
+                        
+                        Text(
+                            text = "Now Playing",
+                            color = Color.White,
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.weight(1f)
+                        )
+                        
                         IconButton(
                             onClick = { 
                                 showSettings = true
@@ -398,6 +384,49 @@ fun VideoPlayerScreen(
                             Icon(Icons.Rounded.Settings, contentDescription = "Settings", tint = Color.White)
                         }
                     }
+
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    QuickOptionsBar(
+                        isMuted = isMuted,
+                        isNightMode = isNightMode,
+                        onSubtitleClick = {
+                            showSubtitleDialog = true
+                            viewModel.resetHideTimer()
+                        },
+                        onSpeedClick = {
+                            showSettings = true
+                            viewModel.resetHideTimer()
+                        },
+                        onAudioClick = {
+                            showAudioDialog = true
+                            viewModel.resetHideTimer()
+                        },
+                        onVolumeClick = {
+                            showVolumeDialog = true
+                            viewModel.resetHideTimer()
+                        },
+                        onMuteClick = {
+                            viewModel.toggleMute()
+                            viewModel.resetHideTimer()
+                        },
+                        onRotateClick = {
+                            viewModel.toggleOrientation()
+                            viewModel.resetHideTimer()
+                        },
+                        onEqualizerClick = {
+                            showSettings = true
+                            viewModel.resetHideTimer()
+                        },
+                        onPopupClick = {
+                            enterPictureInPicture(context)
+                            viewModel.resetHideTimer()
+                        },
+                        onNightClick = {
+                            isNightMode = !isNightMode
+                            viewModel.resetHideTimer()
+                        }
+                    )
                 }
             }
 
@@ -523,8 +552,37 @@ fun VideoPlayerScreen(
                 }
             }
         }
+
+        if (isNightMode) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.28f))
+            )
+        }
     }
 }
+
+    if (showVolumeDialog && !isInPipMode) {
+        ValueSliderDialog(
+            title = "Volume",
+            icon = if (isMuted) Icons.Rounded.VolumeOff else Icons.Rounded.VolumeUp,
+            value = volume,
+            onValueChange = { viewModel.setVolume(it) },
+            onDismiss = { showVolumeDialog = false }
+        )
+    }
+
+    if (showAudioDialog && !isInPipMode) {
+        AudioLanguageDialog(
+            audioTracks = audioTracks,
+            onAudioTrackSelect = {
+                viewModel.selectAudioTrack(it)
+                showAudioDialog = false
+            },
+            onDismiss = { showAudioDialog = false }
+        )
+    }
 
     if (showSettings && !isInPipMode) {
         AdvancedSettingsDialog(
@@ -550,6 +608,143 @@ fun VideoPlayerScreen(
             },
             onDismiss = { showSubtitleDialog = false }
         )
+    }
+}
+
+@Composable
+fun QuickOptionsBar(
+    isMuted: Boolean,
+    isNightMode: Boolean,
+    onSubtitleClick: () -> Unit,
+    onSpeedClick: () -> Unit,
+    onAudioClick: () -> Unit,
+    onVolumeClick: () -> Unit,
+    onMuteClick: () -> Unit,
+    onRotateClick: () -> Unit,
+    onEqualizerClick: () -> Unit,
+    onPopupClick: () -> Unit,
+    onNightClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState())
+            .padding(bottom = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(16.dp),
+        verticalAlignment = Alignment.Top
+    ) {
+        QuickOptionItem(Icons.Rounded.Subtitles, "Subtitle", onSubtitleClick)
+        QuickOptionItem(Icons.Rounded.Speed, "Speed", onSpeedClick)
+        QuickOptionItem(Icons.Rounded.Audiotrack, "Audio", onAudioClick)
+        QuickOptionItem(Icons.Rounded.VolumeUp, "Volume", onVolumeClick)
+        QuickOptionItem(
+            icon = if (isMuted) Icons.Rounded.VolumeOff else Icons.Rounded.VolumeMute,
+            label = "Mute",
+            onClick = onMuteClick
+        )
+        QuickOptionItem(Icons.Rounded.ScreenRotation, "Rotate", onRotateClick)
+        QuickOptionItem(Icons.Rounded.Equalizer, "Equalizer", onEqualizerClick)
+        QuickOptionItem(Icons.Rounded.PictureInPicture, "Popup", onPopupClick)
+        QuickOptionItem(
+            icon = if (isNightMode) Icons.Rounded.Nightlight else Icons.Rounded.DarkMode,
+            label = "Night",
+            onClick = onNightClick
+        )
+    }
+}
+
+@Composable
+fun QuickOptionItem(
+    icon: ImageVector,
+    label: String,
+    onClick: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .width(62.dp)
+            .clickable(onClick = onClick),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Box(
+            modifier = Modifier
+                .size(42.dp)
+                .clip(CircleShape)
+                .background(Color.Black.copy(alpha = 0.62f)),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                icon,
+                contentDescription = label,
+                tint = Color.White,
+                modifier = Modifier.size(23.dp)
+            )
+        }
+        Spacer(modifier = Modifier.height(5.dp))
+        Text(
+            text = label,
+            color = Color.White,
+            maxLines = 1,
+            fontSize = 10.sp,
+            fontWeight = FontWeight.Medium
+        )
+    }
+}
+
+@Composable
+fun ValueSliderDialog(
+    title: String,
+    icon: ImageVector,
+    value: Float,
+    onValueChange: (Float) -> Unit,
+    onDismiss: () -> Unit
+) {
+    androidx.compose.ui.window.Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth(0.86f)
+                .wrapContentHeight()
+                .padding(16.dp),
+            shape = RoundedCornerShape(24.dp),
+            color = DeepBlack,
+            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.1f))
+        ) {
+            Column(modifier = Modifier.padding(22.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(icon, contentDescription = null, tint = PrimaryAccent, modifier = Modifier.size(24.dp))
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Text(
+                        title,
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 18.sp,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Text(
+                        "${(value * 100).toInt()}%",
+                        color = Color.White.copy(alpha = 0.76f),
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+                Spacer(modifier = Modifier.height(16.dp))
+                Slider(
+                    value = value,
+                    onValueChange = onValueChange,
+                    valueRange = 0f..1f,
+                    colors = SliderDefaults.colors(
+                        thumbColor = PrimaryAccent,
+                        activeTrackColor = PrimaryAccent,
+                        inactiveTrackColor = Color.White.copy(alpha = 0.16f)
+                    )
+                )
+            }
+        }
     }
 }
 
@@ -773,6 +968,121 @@ fun SettingsChip(selected: Boolean, label: String, onClick: () -> Unit) {
         shape = RoundedCornerShape(12.dp),
         modifier = Modifier.heightIn(min = 36.dp)
     )
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+fun AudioLanguageDialog(
+    audioTracks: List<AudioTrackInfo>,
+    onAudioTrackSelect: (String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val configuration = androidx.compose.ui.platform.LocalConfiguration.current
+    val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+    val dialogWidth = if (isLandscape) 0.52f else 0.9f
+    val rowMinHeight = if (isLandscape) 42.dp else 50.dp
+
+    androidx.compose.ui.window.Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth(dialogWidth)
+                .wrapContentHeight()
+                .heightIn(max = if (isLandscape) 360.dp else 560.dp)
+                .padding(if (isLandscape) 10.dp else 16.dp),
+            shape = RoundedCornerShape(if (isLandscape) 22.dp else 28.dp),
+            color = DeepBlack,
+            tonalElevation = 8.dp,
+            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.1f))
+        ) {
+            Column(
+                modifier = Modifier
+                    .verticalScroll(rememberScrollState())
+                    .padding(if (isLandscape) 16.dp else 22.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(if (isLandscape) 36.dp else 42.dp)
+                            .clip(CircleShape)
+                            .background(PrimaryAccent.copy(alpha = 0.18f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            Icons.Rounded.Audiotrack,
+                            contentDescription = null,
+                            tint = PrimaryAccent,
+                            modifier = Modifier.size(if (isLandscape) 20.dp else 22.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            "Audio Language",
+                            color = Color.White,
+                            fontWeight = FontWeight.ExtraBold,
+                            fontSize = if (isLandscape) 18.sp else 20.sp
+                        )
+                        Text(
+                            if (audioTracks.isEmpty()) "No alternate audio tracks found" else "${audioTracks.size} tracks available",
+                            color = Color.White.copy(alpha = 0.58f),
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+                    IconButton(onClick = onDismiss) {
+                        Icon(Icons.Rounded.Close, contentDescription = "Close", tint = Color.White.copy(alpha = 0.82f))
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(if (isLandscape) 12.dp else 20.dp))
+
+                if (audioTracks.isEmpty()) {
+                    Surface(
+                        color = Color.White.copy(alpha = 0.05f),
+                        shape = RoundedCornerShape(16.dp),
+                        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.06f)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            "Only default audio is available",
+                            color = Color.White.copy(alpha = 0.72f),
+                            style = MaterialTheme.typography.bodyMedium,
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 14.dp)
+                        )
+                    }
+                } else {
+                    SubtitleSectionTitle(icon = Icons.Rounded.Translate, title = "Language")
+                    Spacer(modifier = Modifier.height(8.dp))
+                    FlowRow(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(if (isLandscape) 6.dp else 8.dp)
+                    ) {
+                        audioTracks.forEach { track ->
+                            val rowModifier = if (isLandscape) {
+                                Modifier.fillMaxWidth(0.48f)
+                            } else {
+                                Modifier.fillMaxWidth()
+                            }
+
+                            SubtitleTrackRow(
+                                title = track.displayLabel,
+                                selected = track.isSelected,
+                                minHeight = rowMinHeight,
+                                modifier = rowModifier,
+                                onClick = { onAudioTrackSelect(track.id) }
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -1007,4 +1317,14 @@ fun formatTime(ms: Long): String {
     val minutes = totalSeconds / 60
     val seconds = totalSeconds % 60
     return "%02d:%02d".format(minutes, seconds)
+}
+
+fun enterPictureInPicture(context: android.content.Context) {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
+
+    val activity = context as? Activity ?: return
+    val params = PictureInPictureParams.Builder()
+        .setAspectRatio(Rational(16, 9))
+        .build()
+    activity.enterPictureInPictureMode(params)
 }

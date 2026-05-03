@@ -1,9 +1,12 @@
 package com.mplayer.videoplayer.mobile
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.provider.OpenableColumns
 import android.util.Rational
 import android.widget.Toast
 import android.content.Context
@@ -41,6 +44,7 @@ import android.content.res.Configuration
 import android.app.Activity
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalConfiguration
+import com.mplayer.videoplayer.core.model.VideoMediaItem
 
 
 
@@ -54,6 +58,7 @@ class MainActivity : ComponentActivity() {
     private var hasStartedMobilePlayback = false
     private var hasStartedTvPlayback = false
     private var skipNextStartRefresh = false
+    private var externalVideoToOpen by mutableStateOf<VideoMediaItem?>(null)
 
     private val intentSenderLauncher = registerForActivityResult(
         ActivityResultContracts.StartIntentSenderForResult()
@@ -89,6 +94,7 @@ class MainActivity : ComponentActivity() {
             window.attributes.layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
         }
 
+        externalVideoToOpen = intent.toExternalVideoItem()
 
         if (!isTelevisionDevice()) {
             lifecycleScope.launch {
@@ -111,6 +117,12 @@ class MainActivity : ComponentActivity() {
         checkAndRequestPermissions()
     }
 
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        externalVideoToOpen = intent.toExternalVideoItem()
+    }
+
     private fun checkAndRequestPermissions() {
         when {
             hasVideoPermission() -> {
@@ -127,6 +139,60 @@ class MainActivity : ComponentActivity() {
                 requestPermissionLauncher.launch(videoPermission())
             }
         }
+    }
+
+    private fun Intent.toExternalVideoItem(): VideoMediaItem? {
+        if (action != Intent.ACTION_VIEW) return null
+        val uri = data ?: return null
+        val mimeType = resolveMimeType(uri, type)
+        if (!isSupportedVideoOpen(uri, mimeType)) return null
+
+        return VideoMediaItem(
+            id = uri.toString(),
+            title = resolveDisplayName(uri),
+            description = "External Video",
+            thumbnailUri = uri,
+            uri = uri,
+            filePath = uri.path,
+            folderName = "External",
+            mimeType = mimeType
+        )
+    }
+
+    private fun resolveMimeType(uri: Uri, intentType: String?): String? {
+        val resolverType = runCatching { contentResolver.getType(uri) }.getOrNull()
+        return intentType
+            ?.takeIf { it.isNotBlank() }
+            ?: resolverType?.takeIf { it.isNotBlank() }
+    }
+
+    private fun isSupportedVideoOpen(uri: Uri, mimeType: String?): Boolean {
+        if (mimeType?.startsWith("video/") == true) return true
+        if (mimeType == "application/octet-stream") return hasKnownVideoExtension(uri)
+        return hasKnownVideoExtension(uri)
+    }
+
+    private fun hasKnownVideoExtension(uri: Uri): Boolean {
+        val name = resolveDisplayName(uri).lowercase()
+        return listOf(
+            ".mp4", ".m4v", ".mkv", ".webm", ".avi", ".mov", ".3gp", ".3g2",
+            ".ts", ".m2ts", ".mts", ".flv", ".f4v", ".wmv", ".mpg", ".mpeg",
+            ".vob", ".ogv", ".rm", ".rmvb", ".asf", ".divx"
+        ).any { name.endsWith(it) }
+    }
+
+    private fun resolveDisplayName(uri: Uri): String {
+        runCatching {
+            contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
+                if (cursor.moveToFirst()) {
+                    val index = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                    if (index != -1) {
+                        cursor.getString(index)?.takeIf { it.isNotBlank() }?.let { return it }
+                    }
+                }
+            }
+        }
+        return uri.lastPathSegment?.substringAfterLast('/') ?: "External video"
     }
 
     private fun videoPermission(): String {
@@ -169,6 +235,16 @@ class MainActivity : ComponentActivity() {
         val lastPlayedVideo by homeViewModel.lastPlayedVideo.collectAsState()
         
         var selectedFolderName by remember { mutableStateOf("") }
+
+        LaunchedEffect(externalVideoToOpen?.id) {
+            val video = externalVideoToOpen ?: return@LaunchedEffect
+            hasStartedMobilePlayback = true
+            playerViewModel.playMedia(video)
+            externalVideoToOpen = null
+            navController.navigate("player") {
+                launchSingleTop = true
+            }
+        }
 
         LaunchedEffect(lastPlayedVideo?.id) {
             val video = lastPlayedVideo ?: return@LaunchedEffect
