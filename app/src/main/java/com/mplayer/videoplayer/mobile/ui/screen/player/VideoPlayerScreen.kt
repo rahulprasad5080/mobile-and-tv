@@ -7,6 +7,7 @@ import android.content.res.Configuration
 import android.os.Build
 import android.util.Rational
 import android.view.ViewGroup
+import android.view.WindowManager
 import android.widget.FrameLayout
 import androidx.activity.compose.BackHandler
 import kotlin.OptIn
@@ -107,6 +108,18 @@ fun VideoPlayerScreen(
         (context as? Activity)?.requestedOrientation = orientationMode
     }
 
+    DisposableEffect(context, isPlaying, isInPipMode) {
+        val window = (context as? Activity)?.window
+        if (isPlaying && !isInPipMode) {
+            window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        } else {
+            window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        }
+
+        onDispose {
+            window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        }
+    }
 
     val lifecycleOwner = LocalLifecycleOwner.current
     var wasPlayingBeforePause by remember { mutableStateOf(false) }
@@ -237,6 +250,7 @@ fun VideoPlayerScreen(
             factory = { ctx ->
                 PlayerView(ctx).apply {
                     this.player = player
+                    keepScreenOn = true
                     useController = false
                     applyNetflixSubtitleStyle(subtitleSize, isTv = false)
                     layoutParams = FrameLayout.LayoutParams(
@@ -247,6 +261,7 @@ fun VideoPlayerScreen(
             },
             update = { view ->
                 view.player = player
+                view.keepScreenOn = isPlaying && !isInPipMode
                 view.resizeMode = resizeMode
                 view.applyNetflixSubtitleStyle(subtitleSize, isTv = false)
             },
