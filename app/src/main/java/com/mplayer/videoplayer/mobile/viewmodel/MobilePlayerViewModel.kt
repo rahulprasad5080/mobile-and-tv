@@ -38,6 +38,9 @@ class MobilePlayerViewModel(application: Application) : AndroidViewModel(applica
     private val _duration = MutableStateFlow(0L)
     val duration: StateFlow<Long> = _duration.asStateFlow()
 
+    private val _currentTitle = MutableStateFlow("")
+    val currentTitle: StateFlow<String> = _currentTitle.asStateFlow()
+
     private val _showControls = MutableStateFlow(true)
     val showControls: StateFlow<Boolean> = _showControls.asStateFlow()
 
@@ -121,6 +124,7 @@ class MobilePlayerViewModel(application: Application) : AndroidViewModel(applica
             playlist = listOf(item)
         }
         currentVideo = item
+        _currentTitle.value = item.title
         hasManualOrientationOverride = false
         _currentPosition.value = startPositionMs.coerceAtLeast(0)
         _duration.value = 0L

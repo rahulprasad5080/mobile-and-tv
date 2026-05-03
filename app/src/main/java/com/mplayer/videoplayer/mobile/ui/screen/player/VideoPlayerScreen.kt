@@ -32,6 +32,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -67,6 +68,7 @@ fun VideoPlayerScreen(
     val isPlaying by viewModel.isPlaying.collectAsState()
     val currentPosition by viewModel.currentPosition.collectAsState()
     val duration by viewModel.duration.collectAsState()
+    val currentTitle by viewModel.currentTitle.collectAsState()
     val volume by viewModel.volume.collectAsState()
     val brightness by viewModel.brightness.collectAsState()
     val isMuted by viewModel.isMuted.collectAsState()
@@ -376,11 +378,15 @@ fun VideoPlayerScreen(
                         }
                         
                         Text(
-                            text = "Now Playing",
+                            text = currentTitle.ifBlank { "Now Playing" },
                             color = Color.White,
                             style = MaterialTheme.typography.titleSmall,
                             fontWeight = FontWeight.Bold,
-                            modifier = Modifier.weight(1f)
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier
+                                .weight(1f)
+                                .padding(horizontal = 8.dp)
                         )
                         
                         IconButton(
