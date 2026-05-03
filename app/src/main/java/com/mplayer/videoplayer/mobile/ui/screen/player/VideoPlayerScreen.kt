@@ -36,6 +36,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import com.mplayer.videoplayer.core.model.AudioTrackInfo
 import com.mplayer.videoplayer.core.model.SubtitleTrackInfo
@@ -450,6 +451,7 @@ fun VideoPlayerScreen(
             ) {
                 BottomPlaybackControls(
                     isPlaying = isPlaying,
+                    resizeMode = resizeMode,
                     currentPosition = currentPosition,
                     duration = duration,
                     onLockClick = {
@@ -479,8 +481,8 @@ fun VideoPlayerScreen(
                         viewModel.seekTo((currentPosition + 10000).coerceAtMost(duration))
                         viewModel.resetHideTimer()
                     },
-                    onFullscreenClick = {
-                        viewModel.toggleOrientation()
+                    onAspectRatioClick = {
+                        viewModel.setResizeMode(nextResizeMode(resizeMode))
                         viewModel.resetHideTimer()
                     }
                 )
@@ -571,6 +573,7 @@ fun VideoPlayerScreen(
 @Composable
 fun BottomPlaybackControls(
     isPlaying: Boolean,
+    resizeMode: Int,
     currentPosition: Long,
     duration: Long,
     onLockClick: () -> Unit,
@@ -580,7 +583,7 @@ fun BottomPlaybackControls(
     onPlayPauseClick: () -> Unit,
     onNextClick: () -> Unit,
     onForwardClick: () -> Unit,
-    onFullscreenClick: () -> Unit
+    onAspectRatioClick: () -> Unit
 ) {
     Column(
         modifier = Modifier
@@ -656,9 +659,9 @@ fun BottomPlaybackControls(
                 onClick = onForwardClick
             )
             BottomControlButton(
-                icon = Icons.Rounded.Fullscreen,
-                contentDescription = "Fullscreen",
-                onClick = onFullscreenClick
+                icon = resizeModeIcon(resizeMode),
+                contentDescription = resizeModeLabel(resizeMode),
+                onClick = onAspectRatioClick
             )
         }
     }
@@ -1021,18 +1024,46 @@ fun PlaybackSection(currentSpeed: Float, onSpeedChange: (Float) -> Unit) {
 fun DisplaySection(resizeMode: Int, onResizeModeChange: (Int) -> Unit) {
     SettingsSectionHeader(Icons.Rounded.AspectRatio, "Aspect Ratio")
     Spacer(modifier = Modifier.height(12.dp))
-    val modes = listOf(0 to "Fit", 3 to "Fill", 4 to "Zoom")
     FlowRow(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        modes.forEach { (mode, label) ->
+        resizeModeOptions.forEach { (mode, label) ->
             SettingsChip(
                 selected = resizeMode == mode,
                 label = label,
                 onClick = { onResizeModeChange(mode) }
             )
         }
+    }
+}
+
+private val resizeModeOptions: List<Pair<Int, String>> = listOf(
+    AspectRatioFrameLayout.RESIZE_MODE_FIXED_WIDTH to "Original",
+    AspectRatioFrameLayout.RESIZE_MODE_FIT to "Fit",
+    AspectRatioFrameLayout.RESIZE_MODE_FIXED_HEIGHT to "Fill",
+    AspectRatioFrameLayout.RESIZE_MODE_ZOOM to "Zoom",
+    AspectRatioFrameLayout.RESIZE_MODE_FILL to "Stretch"
+)
+
+private fun nextResizeMode(currentMode: Int): Int {
+    val currentIndex = resizeModeOptions.indexOfFirst { it.first == currentMode }
+    val nextIndex = if (currentIndex == -1) 0 else (currentIndex + 1) % resizeModeOptions.size
+    return resizeModeOptions[nextIndex].first
+}
+
+private fun resizeModeLabel(mode: Int): String {
+    return resizeModeOptions.firstOrNull { it.first == mode }?.second ?: "Aspect ratio"
+}
+
+private fun resizeModeIcon(mode: Int): ImageVector {
+    return when (mode) {
+        AspectRatioFrameLayout.RESIZE_MODE_FIXED_WIDTH -> Icons.Rounded.CropFree
+        AspectRatioFrameLayout.RESIZE_MODE_FIT -> Icons.Rounded.FitScreen
+        AspectRatioFrameLayout.RESIZE_MODE_FIXED_HEIGHT -> Icons.Rounded.Fullscreen
+        AspectRatioFrameLayout.RESIZE_MODE_ZOOM -> Icons.Rounded.ZoomOutMap
+        AspectRatioFrameLayout.RESIZE_MODE_FILL -> Icons.Rounded.OpenInFull
+        else -> Icons.Rounded.AspectRatio
     }
 }
 
