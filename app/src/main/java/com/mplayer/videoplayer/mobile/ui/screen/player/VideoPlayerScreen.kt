@@ -747,6 +747,7 @@ fun SettingsChip(selected: Boolean, label: String, onClick: () -> Unit) {
     )
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun SubtitleSelectionDialog(
     subtitleTracks: List<SubtitleTrackInfo>,
@@ -755,27 +756,108 @@ fun SubtitleSelectionDialog(
     onSubtitleTrackSelect: (String?) -> Unit,
     onDismiss: () -> Unit
 ) {
-    AlertDialog(
+    val configuration = androidx.compose.ui.platform.LocalConfiguration.current
+    val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+    val dialogWidth = if (isLandscape) 0.58f else 0.9f
+    val dialogMaxHeight = if (isLandscape) 360.dp else 620.dp
+    val contentPadding = if (isLandscape) 16.dp else 22.dp
+    val headerIconSize = if (isLandscape) 36.dp else 42.dp
+    val headerTextSize = if (isLandscape) 18.sp else 20.sp
+    val sectionGap = if (isLandscape) 14.dp else 22.dp
+    val rowMinHeight = if (isLandscape) 42.dp else 50.dp
+
+    androidx.compose.ui.window.Dialog(
         onDismissRequest = onDismiss,
-        containerColor = DeepBlack,
-        shape = RoundedCornerShape(28.dp),
-        title = { 
-            Text(
-                "Subtitles", 
-                color = Color.White, 
-                fontWeight = FontWeight.ExtraBold,
-                fontSize = 20.sp
-            ) 
-        },
-        text = {
-            Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
-                Text(
-                    "Style",
-                    color = Color.White,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(bottom = 8.dp)
-                )
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth(dialogWidth)
+                .wrapContentHeight()
+                .heightIn(max = dialogMaxHeight)
+                .padding(if (isLandscape) 10.dp else 16.dp),
+            shape = RoundedCornerShape(if (isLandscape) 22.dp else 28.dp),
+            color = DeepBlack,
+            tonalElevation = 8.dp,
+            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.1f))
+        ) {
+            Column(
+                modifier = Modifier
+                    .verticalScroll(rememberScrollState())
+                    .padding(contentPadding)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(headerIconSize)
+                            .clip(CircleShape)
+                            .background(PrimaryAccent.copy(alpha = 0.18f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            Icons.Rounded.Subtitles,
+                            contentDescription = null,
+                            tint = PrimaryAccent,
+                            modifier = Modifier.size(if (isLandscape) 20.dp else 22.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            "Subtitles",
+                            color = Color.White,
+                            fontWeight = FontWeight.ExtraBold,
+                            fontSize = headerTextSize
+                        )
+                        Text(
+                            if (subtitleTracks.isEmpty()) "No subtitle tracks found" else "${subtitleTracks.size} tracks available",
+                            color = Color.White.copy(alpha = 0.58f),
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+                    IconButton(onClick = onDismiss) {
+                        Icon(Icons.Rounded.Close, contentDescription = "Close", tint = Color.White.copy(alpha = 0.82f))
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(if (isLandscape) 12.dp else 20.dp))
+
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(if (isLandscape) 14.dp else 18.dp))
+                        .background(Color.White.copy(alpha = 0.06f))
+                        .border(
+                            1.dp,
+                            Color.White.copy(alpha = 0.08f),
+                            RoundedCornerShape(if (isLandscape) 14.dp else 18.dp)
+                        )
+                        .padding(horizontal = 16.dp, vertical = if (isLandscape) 10.dp else 16.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        "Sample subtitle preview",
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold,
+                        style = when (selectedSize) {
+                            SubtitleSize.Small -> MaterialTheme.typography.bodyMedium
+                            SubtitleSize.Medium -> MaterialTheme.typography.titleSmall
+                            SubtitleSize.Large -> MaterialTheme.typography.titleMedium
+                        }
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(sectionGap))
+                SubtitleSectionTitle(icon = Icons.Rounded.FormatSize, title = "Text Size")
+                Spacer(modifier = Modifier.height(8.dp))
+                FlowRow(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
                     SubtitleSize.entries.forEach { size ->
                         SettingsChip(
                             selected = selectedSize == size,
@@ -785,51 +867,85 @@ fun SubtitleSelectionDialog(
                     }
                 }
 
-                HorizontalDivider(color = Color.White.copy(alpha = 0.12f), modifier = Modifier.padding(vertical = 16.dp))
+                HorizontalDivider(color = Color.White.copy(alpha = 0.1f), modifier = Modifier.padding(vertical = if (isLandscape) 14.dp else 20.dp))
 
-                Text(
-                    "Language",
-                    color = Color.White,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(bottom = 8.dp)
-                )
-                FilterChip(
-                    selected = subtitleTracks.none { it.isSelected },
-                    onClick = { onSubtitleTrackSelect(null) },
-                    label = { Text("Off", color = if (subtitleTracks.none { it.isSelected }) Color.White else Color.Gray) },
-                    colors = FilterChipDefaults.filterChipColors(
-                        selectedContainerColor = PrimaryAccent,
-                        containerColor = Color.White.copy(alpha = 0.05f)
-                    ),
-                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                    border = null
-                )
-                subtitleTracks.forEach { track ->
-                    FilterChip(
-                        selected = track.isSelected,
-                        onClick = { onSubtitleTrackSelect(track.id) },
-                        label = { 
-                            Text(
-                                track.displayLabel,
-                                color = if (track.isSelected) Color.White else Color.Gray 
-                            ) 
-                        },
-                        colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = PrimaryAccent,
-                            containerColor = Color.White.copy(alpha = 0.05f)
-                        ),
-                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                        border = null
-                    )
+                SubtitleSectionTitle(icon = Icons.Rounded.Translate, title = "Language")
+                Spacer(modifier = Modifier.height(8.dp))
+                val languageOptions = listOf(
+                    Triple("Off", null, subtitleTracks.none { it.isSelected })
+                ) + subtitleTracks.map { track ->
+                    Triple(track.displayLabel, track.id, track.isSelected)
+                }
+                FlowRow(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(if (isLandscape) 6.dp else 8.dp)
+                ) {
+                    languageOptions.forEach { (title, trackId, selected) ->
+                        val rowModifier = if (isLandscape) {
+                            Modifier.fillMaxWidth(0.48f)
+                        } else {
+                            Modifier.fillMaxWidth()
+                        }
+
+                        SubtitleTrackRow(
+                            title = title,
+                            selected = selected,
+                            minHeight = rowMinHeight,
+                            modifier = rowModifier,
+                            onClick = { onSubtitleTrackSelect(trackId) }
+                        )
+                    }
                 }
             }
-        },
-        confirmButton = {
-            TextButton(onClick = onDismiss) { 
-                Text("Close", color = PrimaryAccent, fontWeight = FontWeight.Bold) 
+        }
+    }
+}
+
+@Composable
+fun SubtitleSectionTitle(icon: ImageVector, title: String) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Icon(icon, contentDescription = null, tint = PrimaryAccent, modifier = Modifier.size(18.dp))
+        Spacer(modifier = Modifier.width(8.dp))
+        Text(title, color = Color.White, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+    }
+}
+
+@Composable
+fun SubtitleTrackRow(
+    title: String,
+    selected: Boolean,
+    minHeight: androidx.compose.ui.unit.Dp = 50.dp,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit
+) {
+    Surface(
+        color = if (selected) PrimaryAccent.copy(alpha = 0.22f) else Color.White.copy(alpha = 0.05f),
+        shape = RoundedCornerShape(16.dp),
+        border = BorderStroke(
+            width = 1.dp,
+            color = if (selected) PrimaryAccent.copy(alpha = 0.7f) else Color.White.copy(alpha = 0.06f)
+        ),
+        modifier = modifier
+            .heightIn(min = minHeight)
+            .clickable(onClick = onClick)
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = if (minHeight < 50.dp) 9.dp else 12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                title,
+                color = Color.White,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                modifier = Modifier.weight(1f)
+            )
+            if (selected) {
+                Icon(Icons.Rounded.CheckCircle, contentDescription = null, tint = PrimaryAccent, modifier = Modifier.size(22.dp))
             }
         }
-    )
+    }
 }
 
 @Composable
