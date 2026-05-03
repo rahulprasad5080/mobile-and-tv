@@ -429,10 +429,6 @@ fun VideoPlayerScreen(
                             viewModel.toggleOrientation()
                             viewModel.resetHideTimer()
                         },
-                        onEqualizerClick = {
-                            showSettings = true
-                            viewModel.resetHideTimer()
-                        },
                         onPopupClick = {
                             enterPictureInPicture(context)
                             viewModel.resetHideTimer()
@@ -725,7 +721,6 @@ fun QuickOptionsBar(
     onVolumeClick: () -> Unit,
     onMuteClick: () -> Unit,
     onRotateClick: () -> Unit,
-    onEqualizerClick: () -> Unit,
     onPopupClick: () -> Unit,
     onNightClick: () -> Unit
 ) {
@@ -747,7 +742,6 @@ fun QuickOptionsBar(
             onClick = onMuteClick
         )
         QuickOptionItem(Icons.Rounded.ScreenRotation, "Rotate", onRotateClick)
-        QuickOptionItem(Icons.Rounded.Equalizer, "Equalizer", onEqualizerClick)
         QuickOptionItem(Icons.Rounded.PictureInPicture, "Popup", onPopupClick)
         QuickOptionItem(
             icon = if (isNightMode) Icons.Rounded.Nightlight else Icons.Rounded.DarkMode,
