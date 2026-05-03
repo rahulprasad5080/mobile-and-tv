@@ -18,7 +18,8 @@ class VideoRepository {
             MediaStore.Video.Media.DISPLAY_NAME,
             MediaStore.Video.Media.DURATION,
             MediaStore.Video.Media.BUCKET_DISPLAY_NAME,
-            MediaStore.Video.Media.MIME_TYPE
+            MediaStore.Video.Media.MIME_TYPE,
+            MediaStore.Video.Media.DATA
         )
 
         val sortOrder = "${MediaStore.Video.Media.DATE_ADDED} DESC"
@@ -35,6 +36,7 @@ class VideoRepository {
             val durationColumn = cursor.getColumnIndexOrThrow(MediaStore.Video.Media.DURATION)
             val bucketColumn = cursor.getColumnIndexOrThrow(MediaStore.Video.Media.BUCKET_DISPLAY_NAME)
             val mimeTypeColumn = cursor.getColumnIndexOrThrow(MediaStore.Video.Media.MIME_TYPE)
+            val dataColumn = cursor.getColumnIndexOrThrow(MediaStore.Video.Media.DATA)
 
             while (cursor.moveToNext()) {
                 val id = cursor.getLong(idColumn)
@@ -42,6 +44,7 @@ class VideoRepository {
                 val duration = cursor.getLong(durationColumn)
                 val folderName = cursor.getString(bucketColumn) ?: "Internal memory"
                 val mimeType = cursor.getString(mimeTypeColumn)
+                val filePath = cursor.getString(dataColumn)
                 val contentUri = ContentUris.withAppendedId(
                     MediaStore.Video.Media.EXTERNAL_CONTENT_URI,
                     id
@@ -54,6 +57,7 @@ class VideoRepository {
                         description = "Local Video - ${formatDuration(duration)}",
                         thumbnailUri = contentUri,
                         uri = contentUri,
+                        filePath = filePath,
                         folderName = folderName,
                         mimeType = mimeType
                     )

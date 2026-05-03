@@ -10,9 +10,11 @@ import com.mplayer.videoplayer.core.repository.VideoRepository
 import com.mplayer.videoplayer.core.repository.PlaybackProgressRepository
 import android.content.IntentSender
 import android.net.Uri
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.provider.MediaStore
+import java.io.File
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -20,6 +22,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -44,16 +47,28 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private var loadVideosJob: Job? = null
     private var refreshDebounceJob: Job? = null
     private var mediaObserver: ContentObserver? = null
+    private var folderObserver: android.os.FileObserver? = null
 
-    val videos: StateFlow<List<VideoMediaItem>> = combine(_videos, _searchQuery) { videos, query ->
-        if (query.isBlank()) {
-            videos
-        } else {
-            videos.filter { it.title.contains(query, ignoreCase = true) }
-        }
+    private val _deletedIds = MutableStateFlow<Set<String>>(emptySet())
+    private val _renamedItems = MutableStateFlow<Map<String, String>>(emptyMap())
+
+    private val _copiedVideo = MutableStateFlow<VideoMediaItem?>(null)
+    val copiedVideo: StateFlow<VideoMediaItem?> = _copiedVideo.asStateFlow()
+
+    val videos: StateFlow<List<VideoMediaItem>> = combine(
+        _videos, 
+        _searchQuery, 
+        _deletedIds, 
+        _renamedItems
+    ) { videos, query, deleted, renamed ->
+        videos.filter { it.id !in deleted }
+            .map { video ->
+                renamed[video.id]?.let { video.copy(title = it) } ?: video
+            }
+            .filter { query.isBlank() || it.title.contains(query, ignoreCase = true) }
     }.stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
-    val groupedVideos: StateFlow<Map<String, List<VideoMediaItem>>> = videos.combine(_searchQuery) { videoList, _ ->
+    val groupedVideos: StateFlow<Map<String, List<VideoMediaItem>>> = videos.map { videoList ->
         videoList.groupBy { it.folderName }
     }.stateIn(viewModelScope, SharingStarted.Lazily, emptyMap())
 
@@ -68,7 +83,24 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     fun loadVideos() {
         loadVideosJob?.cancel()
         loadVideosJob = viewModelScope.launch {
-            repository.getVideos(getApplication()).collect {
+            repository.getVideos(getApplication()).collect { it ->
+                // Clear state if MediaStore has caught up
+                val currentDeleted = _deletedIds.value
+                val currentRenamed = _renamedItems.value
+                
+                if (currentDeleted.isNotEmpty() || currentRenamed.isNotEmpty()) {
+                    val stillInMediaStore = it.map { it.id }.toSet()
+                    val newDeleted = currentDeleted.filter { id -> stillInMediaStore.contains(id) }.toSet()
+                    
+                    val newRenamed = currentRenamed.filter { (id, newTitle) ->
+                        val item = it.find { video -> video.id == id }
+                        item != null && item.title != newTitle
+                    }
+                    
+                    _deletedIds.value = newDeleted
+                    _renamedItems.value = newRenamed
+                }
+
                 _videos.value = it
                 val lastId = _lastPlayedVideoId.value
                 val latestLastPlayed = it.find { video -> video.id == lastId }
@@ -104,6 +136,29 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun startFolderObserver(folderPath: String?) {
+        folderObserver?.stopWatching()
+        if (folderPath == null) return
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            folderObserver = object : android.os.FileObserver(File(folderPath), 
+                android.os.FileObserver.CREATE or android.os.FileObserver.DELETE or android.os.FileObserver.MOVED_FROM or android.os.FileObserver.MOVED_TO) {
+                override fun onEvent(event: Int, path: String?) {
+                    refreshVideosSoon()
+                }
+            }
+        } else {
+            @Suppress("DEPRECATION")
+            folderObserver = object : android.os.FileObserver(folderPath, 
+                android.os.FileObserver.CREATE or android.os.FileObserver.DELETE or android.os.FileObserver.MOVED_FROM or android.os.FileObserver.MOVED_TO) {
+                override fun onEvent(event: Int, path: String?) {
+                    refreshVideosSoon()
+                }
+            }
+        }
+        folderObserver?.startWatching()
+    }
+
     fun onSearchQueryChange(query: String) {
         _searchQuery.value = query
     }
@@ -119,30 +174,53 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun deleteVideo(video: VideoMediaItem) {
+        _deletedIds.value = _deletedIds.value + video.id
+        
         viewModelScope.launch {
-            val intentSender = fileRepository.deleteVideo(getApplication(), Uri.parse(video.uri.toString()))
-            if (intentSender != null) {
-                _pendingIntent.value = intentSender
-            } else {
+            try {
+                val intentSender = fileRepository.deleteVideo(getApplication(), video.uri)
+                if (intentSender != null) {
+                    _pendingIntent.value = intentSender
+                }
+            } catch (e: Exception) {
+                _deletedIds.value = _deletedIds.value - video.id
                 loadVideos()
             }
         }
     }
 
     fun renameVideo(video: VideoMediaItem, newName: String) {
+        _renamedItems.value = _renamedItems.value + (video.id to newName)
+
         viewModelScope.launch {
-            val intentSender = fileRepository.renameVideo(getApplication(), Uri.parse(video.uri.toString()), newName)
-            if (intentSender != null) {
-                _pendingIntent.value = intentSender
-            } else {
+            try {
+                val intentSender = fileRepository.renameVideo(getApplication(), video.uri, newName)
+                if (intentSender != null) {
+                    _pendingIntent.value = intentSender
+                }
+            } catch (e: Exception) {
+                _renamedItems.value = _renamedItems.value - video.id
                 loadVideos()
             }
         }
     }
 
-    fun copyVideo(video: VideoMediaItem, targetName: String) {
+    fun copyVideoToClipboard(video: VideoMediaItem) {
+        _copiedVideo.value = video
+    }
+
+    fun pasteVideo(targetFolderName: String, targetFolderPath: String?) {
+        val video = _copiedVideo.value ?: return
+        if (targetFolderPath == null) return
+
         viewModelScope.launch {
-            if (fileRepository.copyVideo(getApplication(), Uri.parse(video.uri.toString()), targetName)) {
+            val success = fileRepository.copyVideoToFolder(
+                getApplication(), 
+                video.uri, 
+                File(targetFolderPath)
+            )
+            if (success) {
+                _copiedVideo.value = null
                 loadVideos()
             }
         }
@@ -157,6 +235,8 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             getApplication<Application>().contentResolver.unregisterContentObserver(it)
         }
         mediaObserver = null
+        folderObserver?.stopWatching()
+        folderObserver = null
         super.onCleared()
     }
 }

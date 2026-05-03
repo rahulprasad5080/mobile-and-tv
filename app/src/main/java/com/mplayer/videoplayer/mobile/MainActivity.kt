@@ -204,7 +204,13 @@ class MainActivity : ComponentActivity() {
                     },
                     onRename = { video, newName -> homeViewModel.renameVideo(video, newName) },
                     onDelete = { video -> homeViewModel.deleteVideo(video) },
-                    onCopy = { video, targetName -> homeViewModel.copyVideo(video, targetName) },
+                    onCopy = { video -> homeViewModel.copyVideoToClipboard(video) },
+                    onPaste = { 
+                        val path = folderVideos.firstOrNull()?.filePath?.let { java.io.File(it).parent }
+                        homeViewModel.pasteVideo(selectedFolderName, path) 
+                    },
+                    copiedVideo = homeViewModel.copiedVideo.collectAsState().value,
+
                     onBackPressed = { navController.popBackStack() }
                 )
             }

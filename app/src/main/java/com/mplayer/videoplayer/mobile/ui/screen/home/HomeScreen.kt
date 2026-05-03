@@ -89,7 +89,7 @@ fun HomeScreen(
                         FolderItem(
                             name = folderName,
                             videoCount = videos.size,
-                            badgeCount = if (folderName == "Download") 2 else if (folderName == "Twitter") 1 else 0,
+                            badgeCount = 0,
                             isTrash = folderName == "Trash",
                             onClick = { onFolderClick(folderName, videos) }
                         )

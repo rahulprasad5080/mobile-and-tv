@@ -9,6 +9,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.ContentPaste
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -33,7 +34,9 @@ fun FolderVideosScreen(
     onVideoClick: (VideoMediaItem) -> Unit,
     onRename: (VideoMediaItem, String) -> Unit,
     onDelete: (VideoMediaItem) -> Unit,
-    onCopy: (VideoMediaItem, String) -> Unit,
+    onCopy: (VideoMediaItem) -> Unit,
+    onPaste: () -> Unit,
+    copiedVideo: VideoMediaItem?,
     onBackPressed: () -> Unit
 ) {
     var videoToRename by remember { mutableStateOf<VideoMediaItem?>(null) }
@@ -59,6 +62,17 @@ fun FolderVideosScreen(
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = DarkBackground)
             )
+        },
+        floatingActionButton = {
+            if (copiedVideo != null) {
+                ExtendedFloatingActionButton(
+                    text = { Text("Paste") },
+                    icon = { Icon(Icons.Default.ContentPaste, contentDescription = null) },
+                    onClick = onPaste,
+                    containerColor = PrimaryBlue,
+                    contentColor = Color.White
+                )
+            }
         }
     ) { padding ->
         LazyColumn(
@@ -76,7 +90,7 @@ fun FolderVideosScreen(
                     onClick = { onVideoClick(video) },
                     onRename = { videoToRename = video; newName = video.title },
                     onDelete = { videoToDelete = video },
-                    onCopy = { onCopy(video, "Copy of ${video.title}") }
+                    onCopy = { onCopy(video) }
                 )
             }
         }

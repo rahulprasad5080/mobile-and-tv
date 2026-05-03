@@ -8,6 +8,7 @@ data class VideoMediaItem(
     val description: String = "",
     val thumbnailUri: Uri? = null,
     val uri: Uri,
+    val filePath: String? = null,
     val folderName: String = "Others",
     val mimeType: String? = null,
     val subtitles: List<SubtitleTrack> = emptyList()
