@@ -47,6 +47,9 @@ import com.mplayer.videoplayer.mobile.viewmodel.MobilePlayerViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import androidx.compose.ui.window.DialogProperties
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.compose.ui.platform.LocalLifecycleOwner
 
 private val TransparentBlack = Color.Black.copy(alpha = 0.5f)
 private val DeepBlack = Color(0xFF0C0C0C)
@@ -98,6 +101,31 @@ fun VideoPlayerScreen(
         (context as? Activity)?.requestedOrientation = orientationMode
     }
 
+
+    val lifecycleOwner = LocalLifecycleOwner.current
+    var wasPlayingBeforePause by remember { mutableStateOf(false) }
+
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_STOP -> {
+                    wasPlayingBeforePause = isPlaying
+                    viewModel.stopPlayback()
+                }
+                Lifecycle.Event.ON_START -> {
+                    if (wasPlayingBeforePause) {
+                        viewModel.playerManager.resume()
+                        wasPlayingBeforePause = false
+                    }
+                }
+                else -> {}
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
 
     DisposableEffect(Unit) {
         onDispose {

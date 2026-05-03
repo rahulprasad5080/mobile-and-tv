@@ -6,6 +6,8 @@ import android.os.Build
 import android.os.Bundle
 import android.util.Rational
 import android.widget.Toast
+import android.content.Context
+import android.os.PowerManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.IntentSenderRequest
@@ -278,6 +280,9 @@ class MainActivity : ComponentActivity() {
 
     override fun onUserLeaveHint() {
         super.onUserLeaveHint()
+        val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
+        if (!powerManager.isInteractive) return
+
         if (isTelevisionDevice() && hasStartedTvPlayback && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val params = PictureInPictureParams.Builder()
                 .setAspectRatio(Rational(16, 9))

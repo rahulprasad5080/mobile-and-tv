@@ -88,6 +88,12 @@ import com.mplayer.videoplayer.core.model.AudioTrackInfo
 import com.mplayer.videoplayer.core.model.SubtitleTrackInfo
 import com.mplayer.videoplayer.tv.viewmodel.TvPlayerViewModel
 import kotlinx.coroutines.delay
+import android.app.Activity
+import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.compose.runtime.DisposableEffect
 
 private val TvOverlayBlack = Color.Black.copy(alpha = 0.62f)
 private val TvPanel = Color(0xFF111722)
@@ -111,6 +117,31 @@ fun TvPlayerScreen(
     var showTrackSelection by remember { mutableStateOf(false) }
     var subtitleSize by remember { mutableStateOf(SubtitleSize.Medium) }
     val playFocusRequester = remember { FocusRequester() }
+
+    val lifecycleOwner = LocalLifecycleOwner.current
+    var wasPlayingBeforePause by remember { mutableStateOf(false) }
+
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_STOP -> {
+                    wasPlayingBeforePause = isPlaying
+                    viewModel.stopPlayback()
+                }
+                Lifecycle.Event.ON_START -> {
+                    if (wasPlayingBeforePause) {
+                        viewModel.playerManager.resume()
+                        wasPlayingBeforePause = false
+                    }
+                }
+                else -> {}
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
 
     BackHandler {
         if (showTrackSelection) {
