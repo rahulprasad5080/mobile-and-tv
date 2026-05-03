@@ -11,7 +11,9 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.*
 import androidx.core.content.ContextCompat
@@ -217,10 +219,18 @@ class MainActivity : ComponentActivity() {
             composable("player") {
                 VideoPlayerScreen(
                     viewModel = playerViewModel,
-                    onBackPressed = { navController.popBackStack() }
+                    onBackPressed = {
+                        closeMobilePlayer()
+                        navController.popBackStack()
+                    }
                 )
             }
         }
+    }
+
+    private fun closeMobilePlayer() {
+        playerViewModel.stopPlayback()
+        hasStartedMobilePlayback = false
     }
 
     @Composable
@@ -311,12 +321,15 @@ class MainActivity : ComponentActivity() {
         if (!hasStartedMobilePlayback) return
 
         playerViewModel.setPipMode(isInPictureInPictureMode)
-        
-        // If we are exiting PiP mode (either returning to app or closing PiP)
-        // we stop playback to ensure no ghost audio remains.
+
         if (!isInPictureInPictureMode) {
-            playerViewModel.stopPlayback()
-            hasStartedMobilePlayback = false
+            lifecycleScope.launch {
+                delay(300)
+                if (hasStartedMobilePlayback && !lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) {
+                    playerViewModel.stopPlayback()
+                    hasStartedMobilePlayback = false
+                }
+            }
         }
     }
 
