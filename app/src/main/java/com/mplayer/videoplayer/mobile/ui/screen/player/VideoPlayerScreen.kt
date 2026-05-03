@@ -825,32 +825,7 @@ fun SubtitleSelectionDialog(
 
                 Spacer(modifier = Modifier.height(if (isLandscape) 12.dp else 20.dp))
 
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(if (isLandscape) 14.dp else 18.dp))
-                        .background(Color.White.copy(alpha = 0.06f))
-                        .border(
-                            1.dp,
-                            Color.White.copy(alpha = 0.08f),
-                            RoundedCornerShape(if (isLandscape) 14.dp else 18.dp)
-                        )
-                        .padding(horizontal = 16.dp, vertical = if (isLandscape) 10.dp else 16.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        "Sample subtitle preview",
-                        color = Color.White,
-                        fontWeight = FontWeight.Bold,
-                        style = when (selectedSize) {
-                            SubtitleSize.Small -> MaterialTheme.typography.bodyMedium
-                            SubtitleSize.Medium -> MaterialTheme.typography.titleSmall
-                            SubtitleSize.Large -> MaterialTheme.typography.titleMedium
-                        }
-                    )
-                }
 
-                Spacer(modifier = Modifier.height(sectionGap))
                 SubtitleSectionTitle(icon = Icons.Rounded.FormatSize, title = "Text Size")
                 Spacer(modifier = Modifier.height(8.dp))
                 FlowRow(
