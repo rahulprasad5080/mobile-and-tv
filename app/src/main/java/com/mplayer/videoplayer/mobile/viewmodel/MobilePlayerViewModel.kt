@@ -27,6 +27,7 @@ class MobilePlayerViewModel(application: Application) : AndroidViewModel(applica
     private val progressRepository = PlaybackProgressRepository(application)
     
     private var currentVideo: VideoMediaItem? = null
+    private var playlist: List<VideoMediaItem> = emptyList()
     
     private val _isPlaying = MutableStateFlow(true)
     val isPlaying: StateFlow<Boolean> = _isPlaying.asStateFlow()
@@ -107,10 +108,22 @@ class MobilePlayerViewModel(application: Application) : AndroidViewModel(applica
         }
     }
 
+    fun setPlaylist(items: List<VideoMediaItem>, currentItem: VideoMediaItem) {
+        playlist = items.takeIf { list -> list.any { it.id == currentItem.id } } ?: listOf(currentItem)
+    }
+
     fun playMedia(item: VideoMediaItem, startPositionMs: Long = 0) {
         releaseJob?.cancel()
+        currentVideo
+            ?.takeIf { it.id != item.id }
+            ?.let { progressRepository.saveProgress(it.id, playerManager.getPlayer()?.currentPosition ?: 0L) }
+        if (playlist.none { it.id == item.id }) {
+            playlist = listOf(item)
+        }
         currentVideo = item
         hasManualOrientationOverride = false
+        _currentPosition.value = startPositionMs.coerceAtLeast(0)
+        _duration.value = 0L
         applyDefaultOrientationForVideo(item)
         playerManager.playMedia(item, startPositionMs)
     }
@@ -133,6 +146,33 @@ class MobilePlayerViewModel(application: Application) : AndroidViewModel(applica
     fun seekTo(position: Long) {
         playerManager.seekTo(position)
         _currentPosition.value = position
+    }
+
+    fun playNext() {
+        playRelativeVideo(offset = 1)
+    }
+
+    fun playPrevious() {
+        playRelativeVideo(offset = -1)
+    }
+
+    private fun playRelativeVideo(offset: Int) {
+        val current = currentVideo ?: return
+        val items = playlist.takeIf { it.isNotEmpty() } ?: listOf(current)
+        val currentIndex = items.indexOfFirst { it.id == current.id }
+        if (currentIndex == -1) return
+
+        if (items.size == 1) {
+            if (offset < 0) {
+                seekTo(0L)
+            }
+            return
+        }
+
+        val nextIndex = (currentIndex + offset + items.size) % items.size
+        val nextVideo = items[nextIndex]
+        val startPosition = progressRepository.getProgress(nextVideo.id)
+        playMedia(nextVideo, startPosition)
     }
 
     fun toggleControls() {

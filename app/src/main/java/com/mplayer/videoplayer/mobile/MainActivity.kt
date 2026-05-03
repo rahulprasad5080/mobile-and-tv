@@ -233,12 +233,14 @@ class MainActivity : ComponentActivity() {
         val navController = rememberNavController()
         val progressRepository = remember { PlaybackProgressRepository(this) }
         val lastPlayedVideo by homeViewModel.lastPlayedVideo.collectAsState()
+        val videos by homeViewModel.videos.collectAsState()
         
         var selectedFolderName by remember { mutableStateOf("") }
 
         LaunchedEffect(externalVideoToOpen?.id) {
             val video = externalVideoToOpen ?: return@LaunchedEffect
             hasStartedMobilePlayback = true
+            playerViewModel.setPlaylist(listOf(video), video)
             playerViewModel.playMedia(video)
             externalVideoToOpen = null
             navController.navigate("player") {
@@ -260,6 +262,7 @@ class MainActivity : ComponentActivity() {
                         homeViewModel.addToRecentlyPlayed(video)
                         val progress = progressRepository.getProgress(video.id)
                         hasStartedMobilePlayback = true
+                        playerViewModel.setPlaylist(videos, video)
                         playerViewModel.playMedia(video, progress)
                         navController.navigate("player")
                     },
@@ -283,6 +286,7 @@ class MainActivity : ComponentActivity() {
                         homeViewModel.addToRecentlyPlayed(video)
                         val progress = progressRepository.getProgress(video.id)
                         hasStartedMobilePlayback = true
+                        playerViewModel.setPlaylist(folderVideos, video)
                         playerViewModel.playMedia(video, progress)
                         navController.navigate("player")
                     },

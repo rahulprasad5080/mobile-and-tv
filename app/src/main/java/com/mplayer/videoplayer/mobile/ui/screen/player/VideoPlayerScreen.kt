@@ -466,7 +466,7 @@ fun VideoPlayerScreen(
                         viewModel.resetHideTimer()
                     },
                     onPreviousClick = {
-                        viewModel.seekTo(0L)
+                        viewModel.playPrevious()
                         viewModel.resetHideTimer()
                     },
                     onPlayPauseClick = {
@@ -474,7 +474,7 @@ fun VideoPlayerScreen(
                         viewModel.resetHideTimer()
                     },
                     onNextClick = {
-                        viewModel.seekTo(duration)
+                        viewModel.playNext()
                         viewModel.resetHideTimer()
                     },
                     onForwardClick = {
