@@ -362,9 +362,16 @@ fun VideoPlayerScreen(
                     ) {
                         IconButton(
                             onClick = onBackPressed,
-                            modifier = Modifier.background(TransparentBlack, CircleShape)
+                            modifier = Modifier
+                                .size(38.dp)
+                                .background(TransparentBlack, CircleShape)
                         ) {
-                            Icon(Icons.Rounded.ArrowBack, contentDescription = "Back", tint = Color.White)
+                            Icon(
+                                Icons.Rounded.ArrowBack,
+                                contentDescription = "Back",
+                                tint = Color.White,
+                                modifier = Modifier.size(21.dp)
+                            )
                         }
                         
                         Text(
@@ -380,9 +387,16 @@ fun VideoPlayerScreen(
                                 showSettings = true
                                 viewModel.resetHideTimer()
                             },
-                            modifier = Modifier.background(TransparentBlack, CircleShape)
+                            modifier = Modifier
+                                .size(38.dp)
+                                .background(TransparentBlack, CircleShape)
                         ) {
-                            Icon(Icons.Rounded.Settings, contentDescription = "Settings", tint = Color.White)
+                            Icon(
+                                Icons.Rounded.Settings,
+                                contentDescription = "Settings",
+                                tint = Color.White,
+                                modifier = Modifier.size(21.dp)
+                            )
                         }
                     }
 
@@ -576,7 +590,7 @@ fun BottomPlaybackControls(
         modifier = Modifier
             .fillMaxWidth()
             .navigationBarsPadding()
-            .padding(start = 10.dp, end = 10.dp, bottom = 8.dp)
+            .padding(start = 10.dp, end = 10.dp, bottom = 6.dp)
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -596,7 +610,7 @@ fun BottomPlaybackControls(
                 },
                 modifier = Modifier
                     .weight(1f)
-                    .height(28.dp)
+                    .height(24.dp)
                     .padding(horizontal = 8.dp),
                 colors = SliderDefaults.colors(
                     thumbColor = PlaybackGreen,
@@ -607,12 +621,12 @@ fun BottomPlaybackControls(
             PlaybackTimeText(formatTime(duration))
         }
 
-        Spacer(modifier = Modifier.height(4.dp))
+        Spacer(modifier = Modifier.height(2.dp))
 
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(58.dp),
+                .height(48.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -659,7 +673,7 @@ private fun PlaybackTimeText(text: String) {
     Text(
         text = text,
         color = Color.White,
-        fontSize = 15.sp,
+        fontSize = 13.sp,
         fontWeight = FontWeight.Medium
     )
 }
@@ -672,13 +686,13 @@ private fun BottomControlButton(
 ) {
     IconButton(
         onClick = onClick,
-        modifier = Modifier.size(42.dp)
+        modifier = Modifier.size(36.dp)
     ) {
         Icon(
             icon,
             contentDescription = contentDescription,
             tint = Color.White,
-            modifier = Modifier.size(31.dp)
+            modifier = Modifier.size(25.dp)
         )
     }
 }
@@ -690,13 +704,13 @@ private fun BottomPlayPauseButton(
 ) {
     IconButton(
         onClick = onClick,
-        modifier = Modifier.size(58.dp)
+        modifier = Modifier.size(48.dp)
     ) {
         Icon(
             if (isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
             contentDescription = "Play/Pause",
             tint = Color.White,
-            modifier = Modifier.size(52.dp)
+            modifier = Modifier.size(42.dp)
         )
     }
 }
@@ -720,7 +734,7 @@ fun QuickOptionsBar(
             .fillMaxWidth()
             .horizontalScroll(rememberScrollState())
             .padding(bottom = 4.dp),
-        horizontalArrangement = Arrangement.spacedBy(16.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
         verticalAlignment = Alignment.Top
     ) {
         QuickOptionItem(Icons.Rounded.Subtitles, "Subtitle", onSubtitleClick)
@@ -751,13 +765,13 @@ fun QuickOptionItem(
 ) {
     Column(
         modifier = Modifier
-            .width(62.dp)
+            .width(52.dp)
             .clickable(onClick = onClick),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Box(
             modifier = Modifier
-                .size(42.dp)
+                .size(34.dp)
                 .clip(CircleShape)
                 .background(Color.Black.copy(alpha = 0.62f)),
             contentAlignment = Alignment.Center
@@ -766,15 +780,15 @@ fun QuickOptionItem(
                 icon,
                 contentDescription = label,
                 tint = Color.White,
-                modifier = Modifier.size(23.dp)
+                modifier = Modifier.size(19.dp)
             )
         }
-        Spacer(modifier = Modifier.height(5.dp))
+        Spacer(modifier = Modifier.height(3.dp))
         Text(
             text = label,
             color = Color.White,
             maxLines = 1,
-            fontSize = 10.sp,
+            fontSize = 9.sp,
             fontWeight = FontWeight.Medium
         )
     }
