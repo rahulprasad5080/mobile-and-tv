@@ -7,8 +7,6 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
-import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.core.animateFloatAsState
@@ -37,7 +35,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -54,9 +51,6 @@ import androidx.compose.material.icons.rounded.SkipNext
 import androidx.compose.material.icons.rounded.SkipPrevious
 import androidx.compose.material.icons.rounded.Speed
 import androidx.compose.material.icons.rounded.Subtitles
-import androidx.compose.material.icons.rounded.VolumeDown
-import androidx.compose.material.icons.rounded.VolumeOff
-import androidx.compose.material.icons.rounded.VolumeUp
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Button
@@ -93,7 +87,6 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
-import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalContext
@@ -129,7 +122,6 @@ fun TvPlayerScreen(
     val currentPosition by viewModel.currentPosition.collectAsState()
     val duration by viewModel.duration.collectAsState()
     val currentTitle by viewModel.currentTitle.collectAsState()
-    val isMuted by viewModel.isMuted.collectAsState()
     val playbackSpeed by viewModel.playbackSpeed.collectAsState()
     val resizeMode by viewModel.resizeMode.collectAsState()
     val audioTracks by viewModel.audioTracks.collectAsState()
@@ -205,9 +197,7 @@ fun TvPlayerScreen(
     }
 
     LaunchedEffect(showControls, isModalOpen) {
-        if (showControls && !isModalOpen) {
-            runCatching { playFocusRequester.requestFocus() }
-        } else if (!isModalOpen) {
+        if (!showControls && !isModalOpen) {
             runCatching { rootFocusRequester.requestFocus() }
         }
     }
@@ -344,7 +334,6 @@ fun TvPlayerScreen(
         ) {
             TvPlayerTopBar(
                 title = currentTitle.ifBlank { "Now Playing" },
-                isMuted = isMuted,
                 onBackPressed = onBackPressed,
                 onAudioClick = {
                     showAudioPopup = true
@@ -352,10 +341,6 @@ fun TvPlayerScreen(
                 },
                 onSubtitleClick = {
                     showSubtitlePopup = true
-                    showControls = true
-                },
-                onMuteToggle = {
-                    viewModel.toggleMute()
                     showControls = true
                 },
                 onSettingsClick = { showSettings = true }
@@ -397,7 +382,7 @@ fun TvPlayerScreen(
                     viewModel.playNext()
                     showControls = true
                 },
-                onZoom = {
+                onScreenSize = {
                     viewModel.setResizeMode(nextResizeMode(resizeMode))
                     showControls = true
                 }
@@ -421,15 +406,10 @@ fun TvPlayerScreen(
     if (showSubtitlePopup) {
         TvSubtitleTracksPopup(
             subtitleTracks = subtitleTracks,
-            selectedSubtitleSize = subtitleSize,
             onDismiss = { showSubtitlePopup = false },
             onSubtitleSelect = {
                 viewModel.selectSubtitleTrack(it)
                 showSubtitlePopup = false
-                showControls = true
-            },
-            onSubtitleSizeChange = {
-                subtitleSize = it
                 showControls = true
             }
         )
@@ -439,7 +419,6 @@ fun TvPlayerScreen(
         TvPlayerSettingsDialog(
             onDismiss = { showSettings = false },
             playbackSpeed = playbackSpeed,
-            resizeMode = resizeMode,
             screenBrightness = screenBrightness,
             onBrightnessDown = {
                 screenBrightness = (screenBrightness - 0.1f).coerceIn(0.05f, 1f)
@@ -456,10 +435,6 @@ fun TvPlayerScreen(
             onSpeedChange = {
                 viewModel.setPlaybackSpeed(it)
                 showControls = true
-            },
-            onResizeModeChange = {
-                viewModel.setResizeMode(it)
-                showControls = true
             }
         )
     }
@@ -468,11 +443,9 @@ fun TvPlayerScreen(
 @Composable
 private fun TvPlayerTopBar(
     title: String,
-    isMuted: Boolean,
     onBackPressed: () -> Unit,
     onAudioClick: () -> Unit,
     onSubtitleClick: () -> Unit,
-    onMuteToggle: () -> Unit,
     onSettingsClick: () -> Unit
 ) {
     Row(
@@ -505,13 +478,8 @@ private fun TvPlayerTopBar(
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            TvIconOnlyButton(Icons.Rounded.Audiotrack, "Audio track", onAudioClick)
+            TvIconOnlyButton(Icons.Rounded.Audiotrack, "Audio language", onAudioClick)
             TvIconOnlyButton(Icons.Rounded.Subtitles, "Subtitles", onSubtitleClick)
-            TvIconOnlyButton(
-                icon = if (isMuted) Icons.Rounded.VolumeOff else Icons.Rounded.VolumeUp,
-                contentDescription = if (isMuted) "Unmute" else "Mute",
-                onClick = onMuteToggle
-            )
             TvIconOnlyButton(Icons.Rounded.Settings, "Settings", onSettingsClick)
         }
     }
@@ -570,7 +538,7 @@ private fun TvCenterControls(
         )
         TvRoundControlButton(
             icon = if (isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
-            contentDescription = "Play or pause",
+            contentDescription = if (isPlaying) "Pause" else "Resume",
             size = 88.dp,
             focusRequester = playFocusRequester,
             emphasized = true,
@@ -627,19 +595,31 @@ private fun TvRoundControlButton(
                 scaleY = scale
             }
             .shadow(
-                elevation = if (isFocused) 22.dp else 8.dp,
+                elevation = if (isFocused) 22.dp else 0.dp,
                 shape = CircleShape,
-                ambientColor = TvAccent,
-                spotColor = TvAccent
+                ambientColor = if (isFocused) TvAccent else Color.Transparent,
+                spotColor = if (isFocused) TvAccent else Color.Transparent
             )
             .clip(CircleShape)
-            .background(if (emphasized) TvAccent else Color.White.copy(alpha = 0.16f))
+            .background(if (isFocused) TvAccent else Color.Transparent)
             .border(
-                width = if (isFocused) 4.dp else 1.dp,
-                color = if (isFocused) Color.White else Color.White.copy(alpha = 0.22f),
+                width = if (isFocused) 4.dp else 0.dp,
+                color = if (isFocused) Color.White else Color.Transparent,
                 shape = CircleShape
             )
             .onFocusChanged { isFocused = it.isFocused }
+            .onPreviewKeyEvent { event ->
+                if (event.type == KeyEventType.KeyDown &&
+                    (event.key == Key.DirectionCenter ||
+                        event.key == Key.Enter ||
+                        event.key == Key.NumPadEnter)
+                ) {
+                    onClick()
+                    true
+                } else {
+                    false
+                }
+            }
             .focusable()
     ) {
         Icon(
@@ -663,7 +643,7 @@ private fun TvProgressBar(
     onPlayPause: () -> Unit,
     onForward: () -> Unit,
     onNext: () -> Unit,
-    onZoom: () -> Unit
+    onScreenSize: () -> Unit
 ) {
     Column(
         modifier = Modifier
@@ -723,7 +703,7 @@ private fun TvProgressBar(
                 )
                 TvRoundControlButton(
                     icon = if (isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
-                    contentDescription = "Play or pause",
+                    contentDescription = if (isPlaying) "Pause" else "Resume",
                     size = 52.dp,
                     focusRequester = playFocusRequester,
                     emphasized = true,
@@ -743,9 +723,9 @@ private fun TvProgressBar(
                 )
                 TvRoundControlButton(
                     icon = Icons.Rounded.AspectRatio,
-                    contentDescription = "Screen zoom",
+                    contentDescription = "Screen size",
                     size = 40.dp,
-                    onClick = onZoom
+                    onClick = onScreenSize
                 )
             }
         }
@@ -763,19 +743,20 @@ private fun TvAudioTracksPopup(
 
     LaunchedEffect(audioTracks) {
         if (audioTracks.isNotEmpty()) {
+            delay(100)
             runCatching { firstOptionFocusRequester.requestFocus() }
         }
     }
 
-    TvSidePopup(title = "Audio Tracks", icon = Icons.Rounded.Audiotrack, onDismiss = onDismiss) {
+    TvSmallPopup(title = "Audio Language", icon = Icons.Rounded.Audiotrack, onDismiss = onDismiss) {
         if (audioTracks.isEmpty()) {
             item { DialogHint("No alternate audio tracks") }
         } else {
-            itemsIndexed(audioTracks, key = { _, track -> track.id }) { index, track ->
+            items(audioTracks, key = { it.id }) { track ->
                 TvTrackOption(
                     label = track.displayLabel,
                     selected = track.isSelected,
-                    focusRequester = firstOptionFocusRequester.takeIf { index == 0 },
+                    focusRequester = firstOptionFocusRequester.takeIf { track == audioTracks.first() },
                     onClick = { onAudioSelect(track.id) }
                 )
             }
@@ -786,22 +767,19 @@ private fun TvAudioTracksPopup(
 @Composable
 private fun TvSubtitleTracksPopup(
     subtitleTracks: List<SubtitleTrackInfo>,
-    selectedSubtitleSize: SubtitleSize,
     onDismiss: () -> Unit,
-    onSubtitleSelect: (String?) -> Unit,
-    onSubtitleSizeChange: (SubtitleSize) -> Unit
+    onSubtitleSelect: (String?) -> Unit
 ) {
     BackHandler(onBack = onDismiss)
     val firstOptionFocusRequester = remember { FocusRequester() }
 
     LaunchedEffect(Unit) {
+        delay(100)
         runCatching { firstOptionFocusRequester.requestFocus() }
     }
 
-    TvSidePopup(title = "Subtitles", icon = Icons.Rounded.Subtitles, onDismiss = onDismiss) {
+    TvSmallPopup(title = "Subtitles", icon = Icons.Rounded.Subtitles, onDismiss = onDismiss) {
         item {
-            DialogSectionHeader(icon = Icons.Rounded.Subtitles, title = "Language")
-            Spacer(modifier = Modifier.height(10.dp))
             TvTrackOption(
                 label = "Off",
                 selected = subtitleTracks.none { it.isSelected },
@@ -817,24 +795,11 @@ private fun TvSubtitleTracksPopup(
                 onClick = { onSubtitleSelect(track.id) }
             )
         }
-
-        item {
-            Spacer(modifier = Modifier.height(18.dp))
-            DialogSectionHeader(icon = Icons.Rounded.Subtitles, title = "Subtitle Size")
-        }
-
-        items(SubtitleSize.entries, key = { it.name }) { size ->
-            TvTrackOption(
-                label = size.name,
-                selected = selectedSubtitleSize == size,
-                onClick = { onSubtitleSizeChange(size) }
-            )
-        }
     }
 }
 
 @Composable
-private fun TvSidePopup(
+private fun TvSmallPopup(
     title: String,
     icon: ImageVector,
     onDismiss: () -> Unit,
@@ -847,7 +812,7 @@ private fun TvSidePopup(
             .fillMaxSize()
             .focusRequester(popupFocusRequester)
             .focusProperties { canFocus = true }
-            .background(Color.Black.copy(alpha = 0.72f))
+            .background(Color.Black.copy(alpha = 0.58f))
             .onPreviewKeyEvent { event ->
                 when {
                     event.type != KeyEventType.KeyDown -> false
@@ -864,33 +829,33 @@ private fun TvSidePopup(
     ) {
         Card(
             modifier = Modifier
-                .fillMaxHeight(0.72f)
-                .widthIn(min = 360.dp, max = 430.dp)
+                .fillMaxHeight(0.26f)
+                .widthIn(min = 260.dp, max = 310.dp)
                 .padding(end = 40.dp),
-            shape = RoundedCornerShape(16.dp),
+            shape = RoundedCornerShape(12.dp),
             colors = CardDefaults.cardColors(containerColor = TvPanel),
             border = BorderStroke(1.dp, Color.White.copy(alpha = 0.12f))
         ) {
             LazyColumn(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(20.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
+                    .padding(12.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 item {
                     DialogSectionHeader(icon = icon, title = title)
-                    Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(6.dp))
                 }
                 content()
                 item {
-                    Spacer(modifier = Modifier.height(12.dp))
+                    Spacer(modifier = Modifier.height(8.dp))
                     Button(
                         onClick = onDismiss,
                         colors = ButtonDefaults.buttonColors(containerColor = TvAccent),
                         modifier = Modifier.fillMaxWidth(),
-                        contentPadding = PaddingValues(vertical = 16.dp)
+                        contentPadding = PaddingValues(vertical = 9.dp)
                     ) {
-                        Text("Close", style = MaterialTheme.typography.titleLarge)
+                        Text("Close", style = MaterialTheme.typography.titleMedium)
                     }
                 }
             }
@@ -903,19 +868,18 @@ private fun TvSidePopup(
 private fun TvPlayerSettingsDialog(
     onDismiss: () -> Unit,
     playbackSpeed: Float,
-    resizeMode: Int,
     screenBrightness: Float,
     onBrightnessDown: () -> Unit,
     onBrightnessUp: () -> Unit,
     onBrightnessChange: (Float) -> Unit,
-    onSpeedChange: (Float) -> Unit,
-    onResizeModeChange: (Int) -> Unit
+    onSpeedChange: (Float) -> Unit
 ) {
     BackHandler(onBack = onDismiss)
     val dialogFocusRequester = remember { FocusRequester() }
     val firstSettingFocusRequester = remember { FocusRequester() }
 
     LaunchedEffect(Unit) {
+        delay(100)
         runCatching { firstSettingFocusRequester.requestFocus() }
     }
 
@@ -941,18 +905,18 @@ private fun TvPlayerSettingsDialog(
     ) {
         Card(
             modifier = Modifier
-                .fillMaxHeight(0.5f)
-                .widthIn(min = 360.dp, max = 410.dp)
+                .fillMaxHeight(0.24f)
+                .widthIn(min = 270.dp, max = 320.dp)
                 .padding(end = 40.dp),
-            shape = RoundedCornerShape(16.dp),
+            shape = RoundedCornerShape(12.dp),
             colors = CardDefaults.cardColors(containerColor = TvPanel),
             border = BorderStroke(1.dp, Color.White.copy(alpha = 0.12f))
         ) {
             LazyColumn(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(18.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+                    .padding(12.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 item {
                     Text(
@@ -1018,26 +982,11 @@ private fun TvPlayerSettingsDialog(
 
                 item {
                     Spacer(modifier = Modifier.height(8.dp))
-                    DialogSectionHeader(icon = Icons.Rounded.AspectRatio, title = "Aspect Ratio")
-                    Spacer(modifier = Modifier.height(8.dp))
-                    TvOptionFlow {
-                        resizeModeOptions.forEach { (mode, label) ->
-                            TvSettingsChip(
-                                label = label,
-                                selected = resizeMode == mode,
-                                onClick = { onResizeModeChange(mode) }
-                            )
-                        }
-                    }
-                }
-
-                item {
-                    Spacer(modifier = Modifier.height(8.dp))
                     Button(
                         onClick = onDismiss,
                         colors = ButtonDefaults.buttonColors(containerColor = TvAccent),
                         modifier = Modifier.fillMaxWidth(),
-                        contentPadding = PaddingValues(vertical = 12.dp)
+                        contentPadding = PaddingValues(vertical = 9.dp)
                     ) {
                         Text("Close", style = MaterialTheme.typography.titleMedium)
                     }
@@ -1122,6 +1071,18 @@ private fun TvSettingsChip(
             .heightIn(min = 52.dp)
             .then(requesterModifier)
             .onFocusChanged { isFocused = it.isFocused }
+            .onPreviewKeyEvent { event ->
+                if (event.type == KeyEventType.KeyDown &&
+                    (event.key == Key.DirectionCenter ||
+                        event.key == Key.Enter ||
+                        event.key == Key.NumPadEnter)
+                ) {
+                    onClick()
+                    true
+                } else {
+                    false
+                }
+            }
             .focusable()
     )
 }
@@ -1161,9 +1122,11 @@ private fun TvTrackOption(
                 scaleY = scale
             }
             .onFocusChanged { isFocused = it.isFocused }
-            .onKeyEvent { event ->
+            .onPreviewKeyEvent { event ->
                 if (event.type == KeyEventType.KeyDown &&
-                    (event.key == Key.DirectionCenter || event.key == Key.Enter)
+                    (event.key == Key.DirectionCenter ||
+                        event.key == Key.Enter ||
+                        event.key == Key.NumPadEnter)
                 ) {
                     onClick()
                     true
