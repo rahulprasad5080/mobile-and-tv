@@ -62,6 +62,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.ContentScale
@@ -94,7 +95,8 @@ fun TvBrowseScreen(
     val folders = remember(videos) { buildFolders(videos) }
     val firstItemFocusRequester = remember { FocusRequester() }
 
-    LaunchedEffect(videos, selectedFolder?.name) {
+    LaunchedEffect(videos, selectedFolder?.name, videoToRename, videoToDelete) {
+        if (videoToRename != null || videoToDelete != null) return@LaunchedEffect
         delay(120)
         runCatching { firstItemFocusRequester.requestFocus() }
     }
@@ -392,7 +394,7 @@ private fun FileListRow(
             }
             .then(requesterModifier)
             .onFocusChanged { isFocused = it.isFocused }
-            .onPreviewKeyEvent { event ->
+            .onKeyEvent { event ->
                 if (event.type == KeyEventType.KeyDown &&
                     (event.key == Key.DirectionCenter || event.key == Key.Enter)
                 ) {

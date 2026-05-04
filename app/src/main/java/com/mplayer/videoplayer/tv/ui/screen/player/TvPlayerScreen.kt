@@ -92,6 +92,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.text.font.FontWeight
@@ -884,10 +885,6 @@ private fun TvSidePopup(
 ) {
     val popupFocusRequester = remember { FocusRequester() }
 
-    LaunchedEffect(Unit) {
-        runCatching { popupFocusRequester.requestFocus() }
-    }
-
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -970,7 +967,6 @@ private fun TvPlayerSettingsDialog(
     val firstSettingFocusRequester = remember { FocusRequester() }
 
     LaunchedEffect(Unit) {
-        runCatching { dialogFocusRequester.requestFocus() }
         runCatching { firstSettingFocusRequester.requestFocus() }
     }
 
@@ -1260,7 +1256,7 @@ private fun TvTrackOption(
                 scaleY = scale
             }
             .onFocusChanged { isFocused = it.isFocused }
-            .onPreviewKeyEvent { event ->
+            .onKeyEvent { event ->
                 if (event.type == KeyEventType.KeyDown &&
                     (event.key == Key.DirectionCenter || event.key == Key.Enter)
                 ) {
