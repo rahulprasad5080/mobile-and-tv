@@ -39,6 +39,7 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import android.view.WindowManager
+import android.view.KeyEvent
 import android.app.PictureInPictureParams
 import android.content.res.Configuration
 import android.app.Activity
@@ -121,6 +122,70 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         externalVideoToOpen = intent.toExternalVideoItem()
+    }
+
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        if (
+            isTelevisionDevice() &&
+            hasStartedTvPlayback &&
+            event.action == KeyEvent.ACTION_DOWN &&
+            handleTvPlayerRemoteKey(event.keyCode)
+        ) {
+            return true
+        }
+        return super.dispatchKeyEvent(event)
+    }
+
+    private fun handleTvPlayerRemoteKey(keyCode: Int): Boolean {
+        return when (keyCode) {
+            KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE,
+            KeyEvent.KEYCODE_SPACE -> {
+                tvPlayerViewModel.togglePlayPause()
+                true
+            }
+            KeyEvent.KEYCODE_MEDIA_PLAY -> {
+                if (!tvPlayerViewModel.isPlaying.value) {
+                    tvPlayerViewModel.togglePlayPause()
+                }
+                true
+            }
+            KeyEvent.KEYCODE_MEDIA_PAUSE -> {
+                if (tvPlayerViewModel.isPlaying.value) {
+                    tvPlayerViewModel.togglePlayPause()
+                }
+                true
+            }
+            KeyEvent.KEYCODE_MEDIA_FAST_FORWARD -> {
+                tvPlayerViewModel.seekBy(10_000)
+                true
+            }
+            KeyEvent.KEYCODE_MEDIA_REWIND -> {
+                tvPlayerViewModel.seekBy(-10_000)
+                true
+            }
+            KeyEvent.KEYCODE_MEDIA_NEXT -> {
+                tvPlayerViewModel.playNext()
+                true
+            }
+            KeyEvent.KEYCODE_MEDIA_PREVIOUS -> {
+                tvPlayerViewModel.playPrevious()
+                true
+            }
+            KeyEvent.KEYCODE_VOLUME_UP -> {
+                tvPlayerViewModel.increaseVolume()
+                true
+            }
+            KeyEvent.KEYCODE_VOLUME_DOWN -> {
+                tvPlayerViewModel.decreaseVolume()
+                true
+            }
+            KeyEvent.KEYCODE_VOLUME_MUTE,
+            KeyEvent.KEYCODE_MUTE -> {
+                tvPlayerViewModel.toggleMute()
+                true
+            }
+            else -> false
+        }
     }
 
     private fun checkAndRequestPermissions() {
@@ -335,6 +400,17 @@ class MainActivity : ComponentActivity() {
         val navController = rememberNavController()
         val progressRepository = remember { PlaybackProgressRepository(this) }
 
+        LaunchedEffect(externalVideoToOpen?.id) {
+            val video = externalVideoToOpen ?: return@LaunchedEffect
+            hasStartedTvPlayback = true
+            tvPlayerViewModel.setPlaylist(listOf(video), video)
+            tvPlayerViewModel.playMedia(video)
+            externalVideoToOpen = null
+            navController.navigate("tv_player") {
+                launchSingleTop = true
+            }
+        }
+
         NavHost(navController = navController, startDestination = "tv_browse") {
             composable("tv_browse") {
                 TvBrowseScreen(
@@ -351,10 +427,18 @@ class MainActivity : ComponentActivity() {
             composable("tv_player") {
                 TvPlayerScreen(
                     viewModel = tvPlayerViewModel,
-                    onBackPressed = { navController.popBackStack() }
+                    onBackPressed = {
+                        closeTvPlayer()
+                        navController.popBackStack()
+                    }
                 )
             }
         }
+    }
+
+    private fun closeTvPlayer() {
+        tvPlayerViewModel.stopPlayback()
+        hasStartedTvPlayback = false
     }
 
     override fun onStart() {

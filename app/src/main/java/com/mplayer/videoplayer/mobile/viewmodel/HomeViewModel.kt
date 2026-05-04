@@ -174,16 +174,16 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun deleteVideo(video: VideoMediaItem) {
-        _deletedIds.value = _deletedIds.value + video.id
-        
         viewModelScope.launch {
             try {
                 val intentSender = fileRepository.deleteVideo(getApplication(), video.uri)
                 if (intentSender != null) {
                     _pendingIntent.value = intentSender
+                } else {
+                    _deletedIds.value = _deletedIds.value + video.id
+                    loadVideos()
                 }
             } catch (e: Exception) {
-                _deletedIds.value = _deletedIds.value - video.id
                 loadVideos()
             }
         }

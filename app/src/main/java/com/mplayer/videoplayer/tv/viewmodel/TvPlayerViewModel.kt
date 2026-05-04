@@ -178,6 +178,25 @@ class TvPlayerViewModel(application: Application) : AndroidViewModel(application
         setVolume(_volume.value + delta)
     }
 
+    fun increaseVolume() {
+        stepVolume(1)
+    }
+
+    fun decreaseVolume() {
+        stepVolume(-1)
+    }
+
+    private fun stepVolume(direction: Int) {
+        val maxVolume = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
+        if (maxVolume <= 0) return
+
+        val currentVolume = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)
+        val nextVolume = (currentVolume + direction).coerceIn(0, maxVolume)
+        audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, nextVolume, 0)
+        _volume.value = nextVolume.toFloat() / maxVolume.toFloat()
+        _isMuted.value = nextVolume == 0
+    }
+
     fun setVolume(value: Float) {
         val maxVolume = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC).toFloat()
         if (maxVolume <= 0) return

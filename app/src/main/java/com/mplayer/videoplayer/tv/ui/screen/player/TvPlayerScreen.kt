@@ -80,6 +80,7 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
@@ -129,8 +130,11 @@ fun TvPlayerScreen(
     val subtitleTracks by viewModel.subtitleTracks.collectAsState()
     var showControls by remember { mutableStateOf(true) }
     var showSettings by remember { mutableStateOf(false) }
+    var showAudioPopup by remember { mutableStateOf(false) }
+    var showSubtitlePopup by remember { mutableStateOf(false) }
     var isNightMode by remember { mutableStateOf(false) }
     var subtitleSize by remember { mutableStateOf(SubtitleSize.Medium) }
+    val rootFocusRequester = remember { FocusRequester() }
     val playFocusRequester = remember { FocusRequester() }
 
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -159,7 +163,11 @@ fun TvPlayerScreen(
     }
 
     BackHandler {
-        if (showSettings) {
+        if (showAudioPopup) {
+            showAudioPopup = false
+        } else if (showSubtitlePopup) {
+            showSubtitlePopup = false
+        } else if (showSettings) {
             showSettings = false
         } else if (showControls) {
             showControls = false
@@ -168,8 +176,14 @@ fun TvPlayerScreen(
         }
     }
 
-    LaunchedEffect(showControls, showSettings, isPlaying, currentPosition) {
-        if (showControls && !showSettings && isPlaying) {
+    DisposableEffect(Unit) {
+        onDispose {
+            viewModel.stopPlayback()
+        }
+    }
+
+    LaunchedEffect(showControls, showSettings, showAudioPopup, showSubtitlePopup, isPlaying, currentPosition) {
+        if (showControls && !showSettings && !showAudioPopup && !showSubtitlePopup && isPlaying) {
             delay(4_000)
             showControls = false
         }
@@ -177,18 +191,60 @@ fun TvPlayerScreen(
 
     LaunchedEffect(showControls) {
         if (showControls) {
-            playFocusRequester.requestFocus()
+            runCatching { playFocusRequester.requestFocus() }
+        } else {
+            runCatching { rootFocusRequester.requestFocus() }
         }
     }
 
     Box(
         modifier = Modifier
             .fillMaxSize()
+            .focusRequester(rootFocusRequester)
+            .focusProperties { canFocus = true }
+            .focusable()
             .background(Color.Black)
             .onPreviewKeyEvent { event ->
                 if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
                 when (event.key) {
-                    Key.DirectionCenter, Key.Enter -> {
+                    Key.MediaPlayPause,
+                    Key.Spacebar -> {
+                        viewModel.togglePlayPause()
+                        showControls = true
+                        true
+                    }
+                    Key.MediaPlay -> {
+                        if (!isPlaying) viewModel.togglePlayPause()
+                        showControls = true
+                        true
+                    }
+                    Key.MediaPause -> {
+                        if (isPlaying) viewModel.togglePlayPause()
+                        showControls = true
+                        true
+                    }
+                    Key.MediaRewind -> {
+                        viewModel.seekBy(-10_000)
+                        showControls = true
+                        true
+                    }
+                    Key.MediaFastForward -> {
+                        viewModel.seekBy(10_000)
+                        showControls = true
+                        true
+                    }
+                    Key.MediaPrevious -> {
+                        viewModel.playPrevious()
+                        showControls = true
+                        true
+                    }
+                    Key.MediaNext -> {
+                        viewModel.playNext()
+                        showControls = true
+                        true
+                    }
+                    Key.DirectionCenter,
+                    Key.Enter -> {
                         if (!showControls) {
                             showControls = true
                             true
@@ -198,8 +254,8 @@ fun TvPlayerScreen(
                     }
                     Key.DirectionLeft -> {
                         if (!showControls) {
-                            showControls = true
                             viewModel.seekBy(-10_000)
+                            showControls = true
                             true
                         } else {
                             false
@@ -207,14 +263,16 @@ fun TvPlayerScreen(
                     }
                     Key.DirectionRight -> {
                         if (!showControls) {
-                            showControls = true
                             viewModel.seekBy(10_000)
+                            showControls = true
                             true
                         } else {
                             false
                         }
                     }
-                    Key.DirectionUp, Key.DirectionDown, Key.Menu -> {
+                    Key.DirectionUp,
+                    Key.DirectionDown,
+                    Key.Menu -> {
                         showControls = true
                         false
                     }
@@ -270,7 +328,29 @@ fun TvPlayerScreen(
         ) {
             TvPlayerTopBar(
                 title = currentTitle.ifBlank { "Now Playing" },
+                volume = volume,
+                isMuted = isMuted,
                 onBackPressed = onBackPressed,
+                onAudioClick = {
+                    showAudioPopup = true
+                    showControls = true
+                },
+                onSubtitleClick = {
+                    showSubtitlePopup = true
+                    showControls = true
+                },
+                onVolumeDown = {
+                    viewModel.decreaseVolume()
+                    showControls = true
+                },
+                onMuteToggle = {
+                    viewModel.toggleMute()
+                    showControls = true
+                },
+                onVolumeUp = {
+                    viewModel.increaseVolume()
+                    showControls = true
+                },
                 onSettingsClick = { showSettings = true }
             )
         }
@@ -332,6 +412,35 @@ fun TvPlayerScreen(
         }
     }
 
+    if (showAudioPopup) {
+        TvAudioTracksPopup(
+            audioTracks = audioTracks,
+            onDismiss = { showAudioPopup = false },
+            onAudioSelect = {
+                viewModel.selectAudioTrack(it)
+                showAudioPopup = false
+                showControls = true
+            }
+        )
+    }
+
+    if (showSubtitlePopup) {
+        TvSubtitleTracksPopup(
+            subtitleTracks = subtitleTracks,
+            selectedSubtitleSize = subtitleSize,
+            onDismiss = { showSubtitlePopup = false },
+            onSubtitleSelect = {
+                viewModel.selectSubtitleTrack(it)
+                showSubtitlePopup = false
+                showControls = true
+            },
+            onSubtitleSizeChange = {
+                subtitleSize = it
+                showControls = true
+            }
+        )
+    }
+
     if (showSettings) {
         TvPlayerSettingsDialog(
             onDismiss = { showSettings = false },
@@ -382,45 +491,103 @@ fun TvPlayerScreen(
 @Composable
 private fun TvPlayerTopBar(
     title: String,
+    volume: Float,
+    isMuted: Boolean,
     onBackPressed: () -> Unit,
+    onAudioClick: () -> Unit,
+    onSubtitleClick: () -> Unit,
+    onVolumeDown: () -> Unit,
+    onMuteToggle: () -> Unit,
+    onVolumeUp: () -> Unit,
     onSettingsClick: () -> Unit
 ) {
-    Row(
+    Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 56.dp, vertical = 34.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
+            .padding(horizontal = 56.dp, vertical = 30.dp)
     ) {
-        Button(
-            onClick = onBackPressed,
-            colors = ButtonDefaults.buttonColors(containerColor = Color.White.copy(alpha = 0.12f)),
-            contentPadding = PaddingValues(horizontal = 24.dp, vertical = 14.dp)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Text("Back", style = MaterialTheme.typography.titleMedium)
+            Button(
+                onClick = onBackPressed,
+                colors = ButtonDefaults.buttonColors(containerColor = Color.White.copy(alpha = 0.12f)),
+                contentPadding = PaddingValues(horizontal = 24.dp, vertical = 14.dp)
+            ) {
+                Text("Back", style = MaterialTheme.typography.titleMedium)
+            }
+
+            Text(
+                text = title,
+                style = MaterialTheme.typography.headlineSmall,
+                color = Color.White,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(horizontal = 34.dp)
+            )
+
+            Button(
+                onClick = onSettingsClick,
+                colors = ButtonDefaults.buttonColors(containerColor = TvAccent),
+                contentPadding = PaddingValues(horizontal = 24.dp, vertical = 14.dp)
+            ) {
+                Icon(Icons.Rounded.Settings, contentDescription = null, modifier = Modifier.size(24.dp))
+                Spacer(modifier = Modifier.width(10.dp))
+                Text("Settings", style = MaterialTheme.typography.titleMedium)
+            }
         }
 
-        Text(
-            text = title,
-            style = MaterialTheme.typography.headlineSmall,
-            color = Color.White,
-            fontWeight = FontWeight.Bold,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier
-                .weight(1f)
-                .padding(horizontal = 34.dp)
-        )
+        Spacer(modifier = Modifier.height(18.dp))
 
-        Button(
-            onClick = onSettingsClick,
-            colors = ButtonDefaults.buttonColors(containerColor = TvAccent),
-            contentPadding = PaddingValues(horizontal = 24.dp, vertical = 14.dp)
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Icon(Icons.Rounded.Settings, contentDescription = null, modifier = Modifier.size(24.dp))
-            Spacer(modifier = Modifier.width(10.dp))
-            Text("Settings", style = MaterialTheme.typography.titleMedium)
+            TvQuickActionButton(Icons.Rounded.Audiotrack, "Audio", onAudioClick)
+            TvQuickActionButton(Icons.Rounded.Subtitles, "Subtitles", onSubtitleClick)
+            TvQuickActionButton(Icons.Rounded.VolumeOff, "Vol -", onVolumeDown)
+            TvQuickActionButton(
+                icon = if (isMuted) Icons.Rounded.VolumeOff else Icons.Rounded.VolumeUp,
+                label = if (isMuted) "Unmute" else "Mute",
+                onClick = onMuteToggle
+            )
+            TvQuickActionButton(Icons.Rounded.VolumeUp, "Vol +", onVolumeUp)
+            Text(
+                text = "${(volume * 100).toInt()}%",
+                style = MaterialTheme.typography.titleMedium,
+                color = Color.White.copy(alpha = 0.88f),
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(start = 4.dp)
+            )
         }
+    }
+}
+
+@Composable
+private fun TvQuickActionButton(
+    icon: ImageVector,
+    label: String,
+    onClick: () -> Unit
+) {
+    var isFocused by remember { mutableStateOf(false) }
+    Button(
+        onClick = onClick,
+        colors = ButtonDefaults.buttonColors(
+            containerColor = if (isFocused) TvAccent else Color.White.copy(alpha = 0.12f)
+        ),
+        contentPadding = PaddingValues(horizontal = 18.dp, vertical = 12.dp),
+        modifier = Modifier
+            .onFocusChanged { isFocused = it.isFocused }
+            .focusable()
+    ) {
+        Icon(icon, contentDescription = null, modifier = Modifier.size(22.dp))
+        Spacer(modifier = Modifier.width(8.dp))
+        Text(label, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
     }
 }
 
@@ -563,6 +730,122 @@ private fun TvProgressBar(
         ) {
             Text(formatTime(currentPosition), color = Color.White, style = MaterialTheme.typography.titleMedium)
             Text(formatTime(duration), color = Color.White, style = MaterialTheme.typography.titleMedium)
+        }
+    }
+}
+
+@Composable
+private fun TvAudioTracksPopup(
+    audioTracks: List<AudioTrackInfo>,
+    onDismiss: () -> Unit,
+    onAudioSelect: (String) -> Unit
+) {
+    BackHandler(onBack = onDismiss)
+
+    TvSidePopup(title = "Audio Tracks", icon = Icons.Rounded.Audiotrack, onDismiss = onDismiss) {
+        if (audioTracks.isEmpty()) {
+            item { DialogHint("No alternate audio tracks") }
+        } else {
+            items(audioTracks, key = { it.id }) { track ->
+                TvTrackOption(
+                    label = track.displayLabel,
+                    selected = track.isSelected,
+                    onClick = { onAudioSelect(track.id) }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun TvSubtitleTracksPopup(
+    subtitleTracks: List<SubtitleTrackInfo>,
+    selectedSubtitleSize: SubtitleSize,
+    onDismiss: () -> Unit,
+    onSubtitleSelect: (String?) -> Unit,
+    onSubtitleSizeChange: (SubtitleSize) -> Unit
+) {
+    BackHandler(onBack = onDismiss)
+
+    TvSidePopup(title = "Subtitles", icon = Icons.Rounded.Subtitles, onDismiss = onDismiss) {
+        item {
+            DialogSectionHeader(icon = Icons.Rounded.Subtitles, title = "Language")
+            Spacer(modifier = Modifier.height(10.dp))
+            TvTrackOption(
+                label = "Off",
+                selected = subtitleTracks.none { it.isSelected },
+                onClick = { onSubtitleSelect(null) }
+            )
+        }
+
+        items(subtitleTracks, key = { it.id }) { track ->
+            TvTrackOption(
+                label = track.displayLabel,
+                selected = track.isSelected,
+                onClick = { onSubtitleSelect(track.id) }
+            )
+        }
+
+        item {
+            Spacer(modifier = Modifier.height(18.dp))
+            DialogSectionHeader(icon = Icons.Rounded.Subtitles, title = "Subtitle Size")
+        }
+
+        items(SubtitleSize.entries, key = { it.name }) { size ->
+            TvTrackOption(
+                label = size.name,
+                selected = selectedSubtitleSize == size,
+                onClick = { onSubtitleSizeChange(size) }
+            )
+        }
+    }
+}
+
+@Composable
+private fun TvSidePopup(
+    title: String,
+    icon: ImageVector,
+    onDismiss: () -> Unit,
+    content: androidx.compose.foundation.lazy.LazyListScope.() -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.72f)),
+        contentAlignment = Alignment.CenterEnd
+    ) {
+        Card(
+            modifier = Modifier
+                .fillMaxHeight()
+                .widthIn(min = 460.dp, max = 560.dp)
+                .padding(vertical = 50.dp, horizontal = 54.dp),
+            shape = RoundedCornerShape(22.dp),
+            colors = CardDefaults.cardColors(containerColor = TvPanel),
+            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.12f))
+        ) {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(28.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                item {
+                    DialogSectionHeader(icon = icon, title = title)
+                    Spacer(modifier = Modifier.height(8.dp))
+                }
+                content()
+                item {
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Button(
+                        onClick = onDismiss,
+                        colors = ButtonDefaults.buttonColors(containerColor = TvAccent),
+                        modifier = Modifier.fillMaxWidth(),
+                        contentPadding = PaddingValues(vertical = 16.dp)
+                    ) {
+                        Text("Close", style = MaterialTheme.typography.titleLarge)
+                    }
+                }
+            }
         }
     }
 }

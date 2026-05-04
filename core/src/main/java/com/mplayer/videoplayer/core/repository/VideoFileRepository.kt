@@ -18,9 +18,31 @@ class VideoFileRepository {
 
     suspend fun deleteVideo(context: Context, uri: Uri): IntentSender? {
         return withContext(Dispatchers.IO) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && uri.scheme == "content") {
+                return@withContext MediaStore.createDeleteRequest(
+                    context.contentResolver,
+                    listOf(uri)
+                ).intentSender
+            }
+
             val path = getPathFromUri(context, uri)
             try {
-                context.contentResolver.delete(uri, null, null)
+                val deletedRows = if (uri.scheme == "content") {
+                    context.contentResolver.delete(uri, null, null)
+                } else {
+                    0
+                }
+
+                val deletedFile = if (deletedRows <= 0) {
+                    path?.let { File(it).delete() } ?: false
+                } else {
+                    true
+                }
+
+                if (!deletedFile) {
+                    throw IllegalStateException("Unable to delete video from storage")
+                }
+
                 path?.let {
                     MediaScannerConnection.scanFile(context, arrayOf(it), null, null)
                 }
