@@ -316,7 +316,7 @@ private fun FolderRow(
             }
         },
         title = folder.name,
-        subtitle = "${folder.videos.size} videos",
+        subtitle = "",
         trailing = "${folder.videos.size} videos"
     )
 }
@@ -350,7 +350,7 @@ private fun VideoRow(
             }
         },
         title = video.title,
-        subtitle = video.description,
+        subtitle = "",
         trailing = video.mimeType?.substringAfterLast('/')?.uppercase().orEmpty(),
         actions = {
             IconButton(onClick = onRenameClick, modifier = Modifier.size(44.dp)) {
@@ -424,13 +424,15 @@ private fun FileListRow(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
-                Text(
-                    text = subtitle,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = FileMuted,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
+                if (subtitle.isNotBlank()) {
+                    Text(
+                        text = subtitle,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = FileMuted,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
             }
             if (trailing.isNotBlank()) {
                 Text(

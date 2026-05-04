@@ -373,11 +373,6 @@ fun VideoListItem(
                     ),
                     maxLines = 1
                 )
-                Text(
-                    text = video.description,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = Color.Gray
-                )
             }
 
             if (!selectionMode) {

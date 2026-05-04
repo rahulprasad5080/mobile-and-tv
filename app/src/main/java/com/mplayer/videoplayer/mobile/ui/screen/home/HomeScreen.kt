@@ -88,7 +88,6 @@ fun HomeScreen(
                     item(key = folderName) {
                         FolderItem(
                             name = folderName,
-                            videoCount = videos.size,
                             badgeCount = 0,
                             isTrash = folderName == "Trash",
                             onClick = { onFolderClick(folderName, videos) }
@@ -103,7 +102,6 @@ fun HomeScreen(
 @Composable
 fun FolderItem(
     name: String,
-    videoCount: Int,
     badgeCount: Int = 0,
     isTrash: Boolean = false,
     onClick: () -> Unit
@@ -152,11 +150,6 @@ fun FolderItem(
                     color = if (isTrash) Color(0xFF4FC3F7) else Color.White,
                     fontWeight = FontWeight.SemiBold
                 )
-            )
-            Text(
-                text = "$videoCount videos",
-                style = MaterialTheme.typography.bodySmall,
-                color = Color.Gray
             )
         }
     }
@@ -222,11 +215,6 @@ fun ContinueWatchingCard(
                     color = Color.White,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
-                )
-                Text(
-                    text = video.folderName,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = Color.Gray
                 )
             }
         }

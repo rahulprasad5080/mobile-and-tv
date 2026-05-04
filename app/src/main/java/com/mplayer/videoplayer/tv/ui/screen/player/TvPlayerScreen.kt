@@ -1,5 +1,6 @@
 package com.mplayer.videoplayer.tv.ui.screen.player
 
+import android.app.Activity
 import android.view.ViewGroup
 import android.widget.FrameLayout
 import androidx.activity.compose.BackHandler
@@ -95,6 +96,7 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -127,17 +129,17 @@ fun TvPlayerScreen(
     val currentPosition by viewModel.currentPosition.collectAsState()
     val duration by viewModel.duration.collectAsState()
     val currentTitle by viewModel.currentTitle.collectAsState()
-    val volume by viewModel.volume.collectAsState()
     val isMuted by viewModel.isMuted.collectAsState()
     val playbackSpeed by viewModel.playbackSpeed.collectAsState()
     val resizeMode by viewModel.resizeMode.collectAsState()
     val audioTracks by viewModel.audioTracks.collectAsState()
     val subtitleTracks by viewModel.subtitleTracks.collectAsState()
+    val context = LocalContext.current
     var showControls by remember { mutableStateOf(true) }
     var showSettings by remember { mutableStateOf(false) }
     var showAudioPopup by remember { mutableStateOf(false) }
     var showSubtitlePopup by remember { mutableStateOf(false) }
-    var isNightMode by remember { mutableStateOf(false) }
+    var screenBrightness by remember { mutableStateOf(0.5f) }
     var subtitleSize by remember { mutableStateOf(SubtitleSize.Medium) }
     val rootFocusRequester = remember { FocusRequester() }
     val playFocusRequester = remember { FocusRequester() }
@@ -185,6 +187,13 @@ fun TvPlayerScreen(
     DisposableEffect(Unit) {
         onDispose {
             viewModel.stopPlayback()
+        }
+    }
+
+    LaunchedEffect(screenBrightness) {
+        val activity = context as? Activity ?: return@LaunchedEffect
+        activity.window.attributes = activity.window.attributes.apply {
+            this.screenBrightness = screenBrightness
         }
     }
 
@@ -335,7 +344,6 @@ fun TvPlayerScreen(
         ) {
             TvPlayerTopBar(
                 title = currentTitle.ifBlank { "Now Playing" },
-                volume = volume,
                 isMuted = isMuted,
                 onBackPressed = onBackPressed,
                 onAudioClick = {
@@ -346,20 +354,8 @@ fun TvPlayerScreen(
                     showSubtitlePopup = true
                     showControls = true
                 },
-                onVolumeDown = {
-                    viewModel.decreaseVolume()
-                    showControls = true
-                },
                 onMuteToggle = {
                     viewModel.toggleMute()
-                    showControls = true
-                },
-                onVolumeUp = {
-                    viewModel.increaseVolume()
-                    showControls = true
-                },
-                onBrightnessClick = {
-                    isNightMode = !isNightMode
                     showControls = true
                 },
                 onSettingsClick = { showSettings = true }
@@ -408,13 +404,6 @@ fun TvPlayerScreen(
             )
         }
 
-        if (isNightMode) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.28f))
-            )
-        }
     }
 
     if (showAudioPopup) {
@@ -449,24 +438,19 @@ fun TvPlayerScreen(
     if (showSettings) {
         TvPlayerSettingsDialog(
             onDismiss = { showSettings = false },
-            audioTracks = audioTracks,
-            subtitleTracks = subtitleTracks,
-            selectedSubtitleSize = subtitleSize,
             playbackSpeed = playbackSpeed,
             resizeMode = resizeMode,
-            volume = volume,
-            isMuted = isMuted,
-            isNightMode = isNightMode,
-            onAudioSelect = {
-                viewModel.selectAudioTrack(it)
+            screenBrightness = screenBrightness,
+            onBrightnessDown = {
+                screenBrightness = (screenBrightness - 0.1f).coerceIn(0.05f, 1f)
                 showControls = true
             },
-            onSubtitleSelect = {
-                viewModel.selectSubtitleTrack(it)
+            onBrightnessUp = {
+                screenBrightness = (screenBrightness + 0.1f).coerceIn(0.05f, 1f)
                 showControls = true
             },
-            onSubtitleSizeChange = {
-                subtitleSize = it
+            onBrightnessChange = {
+                screenBrightness = it.coerceIn(0.05f, 1f)
                 showControls = true
             },
             onSpeedChange = {
@@ -476,18 +460,6 @@ fun TvPlayerScreen(
             onResizeModeChange = {
                 viewModel.setResizeMode(it)
                 showControls = true
-            },
-            onVolumeChange = {
-                viewModel.setVolume(it)
-                showControls = true
-            },
-            onMuteToggle = {
-                viewModel.toggleMute()
-                showControls = true
-            },
-            onNightToggle = {
-                isNightMode = !isNightMode
-                showControls = true
             }
         )
     }
@@ -496,15 +468,11 @@ fun TvPlayerScreen(
 @Composable
 private fun TvPlayerTopBar(
     title: String,
-    volume: Float,
     isMuted: Boolean,
     onBackPressed: () -> Unit,
     onAudioClick: () -> Unit,
     onSubtitleClick: () -> Unit,
-    onVolumeDown: () -> Unit,
     onMuteToggle: () -> Unit,
-    onVolumeUp: () -> Unit,
-    onBrightnessClick: () -> Unit,
     onSettingsClick: () -> Unit
 ) {
     Row(
@@ -539,23 +507,12 @@ private fun TvPlayerTopBar(
         ) {
             TvIconOnlyButton(Icons.Rounded.Audiotrack, "Audio track", onAudioClick)
             TvIconOnlyButton(Icons.Rounded.Subtitles, "Subtitles", onSubtitleClick)
-            TvIconOnlyButton(Icons.Rounded.Brightness6, "Brightness", onBrightnessClick)
-            TvIconOnlyButton(Icons.Rounded.Speed, "Speed settings", onSettingsClick)
             TvIconOnlyButton(
                 icon = if (isMuted) Icons.Rounded.VolumeOff else Icons.Rounded.VolumeUp,
                 contentDescription = if (isMuted) "Unmute" else "Mute",
                 onClick = onMuteToggle
             )
-            TvIconOnlyButton(Icons.Rounded.VolumeDown, "Volume down", onVolumeDown)
-            TvIconOnlyButton(Icons.Rounded.VolumeUp, "Volume up", onVolumeUp)
             TvIconOnlyButton(Icons.Rounded.Settings, "Settings", onSettingsClick)
-            Text(
-                text = "${(volume * 100).toInt()}%",
-                style = MaterialTheme.typography.labelLarge,
-                color = Color.White.copy(alpha = 0.88f),
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(start = 4.dp)
-            )
         }
     }
 }
@@ -596,40 +553,40 @@ private fun TvCenterControls(
     onNext: () -> Unit
 ) {
     Row(
-        horizontalArrangement = Arrangement.spacedBy(26.dp),
+        horizontalArrangement = Arrangement.spacedBy(18.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         TvRoundControlButton(
-            icon = Icons.Rounded.SkipPrevious,
-            contentDescription = "Previous video",
-            size = 74.dp,
-            onClick = onPrevious
-        )
-        TvRoundControlButton(
             icon = Icons.Rounded.Replay10,
             contentDescription = "Rewind 10 seconds",
-            size = 86.dp,
+            size = 68.dp,
             onClick = onRewind
+        )
+        TvRoundControlButton(
+            icon = Icons.Rounded.SkipPrevious,
+            contentDescription = "Previous video",
+            size = 62.dp,
+            onClick = onPrevious
         )
         TvRoundControlButton(
             icon = if (isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
             contentDescription = "Play or pause",
-            size = 112.dp,
+            size = 88.dp,
             focusRequester = playFocusRequester,
             emphasized = true,
             onClick = onPlayPause
         )
         TvRoundControlButton(
-            icon = Icons.Rounded.Forward10,
-            contentDescription = "Forward 10 seconds",
-            size = 86.dp,
-            onClick = onForward
-        )
-        TvRoundControlButton(
             icon = Icons.Rounded.SkipNext,
             contentDescription = "Next video",
-            size = 74.dp,
+            size = 62.dp,
             onClick = onNext
+        )
+        TvRoundControlButton(
+            icon = Icons.Rounded.Forward10,
+            contentDescription = "Forward 10 seconds",
+            size = 68.dp,
+            onClick = onForward
         )
     }
 }
@@ -646,10 +603,11 @@ private fun TvRoundControlButton(
 ) {
     var isFocused by remember { mutableStateOf(false) }
     val iconSize = when {
-        emphasized -> 32.dp
-        size <= 48.dp -> 23.dp
-        size <= 54.dp -> 27.dp
-        else -> 36.dp
+        emphasized -> 28.dp
+        size <= 42.dp -> 20.dp
+        size <= 52.dp -> 23.dp
+        size <= 68.dp -> 28.dp
+        else -> 32.dp
     }
     val scale by animateFloatAsState(
         targetValue = if (isFocused) 1.12f else 1f,
@@ -748,49 +706,48 @@ private fun TvProgressBar(
         ) {
             Row(
                 modifier = Modifier.align(Alignment.Center),
-                horizontalArrangement = Arrangement.spacedBy(14.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 TvRoundControlButton(
-                    icon = Icons.Rounded.SkipPrevious,
-                    contentDescription = "Previous video",
-                    size = 44.dp,
-                    onClick = onPrevious
-                )
-                TvRoundControlButton(
                     icon = Icons.Rounded.Replay10,
                     contentDescription = "Rewind 10 seconds",
-                    size = 48.dp,
+                    size = 42.dp,
                     onClick = onRewind
+                )
+                TvRoundControlButton(
+                    icon = Icons.Rounded.SkipPrevious,
+                    contentDescription = "Previous video",
+                    size = 40.dp,
+                    onClick = onPrevious
                 )
                 TvRoundControlButton(
                     icon = if (isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
                     contentDescription = "Play or pause",
-                    size = 58.dp,
+                    size = 52.dp,
                     focusRequester = playFocusRequester,
                     emphasized = true,
                     onClick = onPlayPause
                 )
                 TvRoundControlButton(
+                    icon = Icons.Rounded.SkipNext,
+                    contentDescription = "Next video",
+                    size = 40.dp,
+                    onClick = onNext
+                )
+                TvRoundControlButton(
                     icon = Icons.Rounded.Forward10,
                     contentDescription = "Forward 10 seconds",
-                    size = 48.dp,
+                    size = 42.dp,
                     onClick = onForward
                 )
                 TvRoundControlButton(
-                    icon = Icons.Rounded.SkipNext,
-                    contentDescription = "Next video",
-                    size = 44.dp,
-                    onClick = onNext
+                    icon = Icons.Rounded.AspectRatio,
+                    contentDescription = "Screen zoom",
+                    size = 40.dp,
+                    onClick = onZoom
                 )
             }
-            TvRoundControlButton(
-                icon = Icons.Rounded.AspectRatio,
-                contentDescription = "Screen zoom",
-                size = 44.dp,
-                modifier = Modifier.align(Alignment.CenterEnd),
-                onClick = onZoom
-            )
         }
     }
 }
@@ -945,22 +902,14 @@ private fun TvSidePopup(
 @Composable
 private fun TvPlayerSettingsDialog(
     onDismiss: () -> Unit,
-    audioTracks: List<AudioTrackInfo>,
-    subtitleTracks: List<SubtitleTrackInfo>,
-    selectedSubtitleSize: SubtitleSize,
     playbackSpeed: Float,
     resizeMode: Int,
-    volume: Float,
-    isMuted: Boolean,
-    isNightMode: Boolean,
-    onAudioSelect: (String) -> Unit,
-    onSubtitleSelect: (String?) -> Unit,
-    onSubtitleSizeChange: (SubtitleSize) -> Unit,
+    screenBrightness: Float,
+    onBrightnessDown: () -> Unit,
+    onBrightnessUp: () -> Unit,
+    onBrightnessChange: (Float) -> Unit,
     onSpeedChange: (Float) -> Unit,
-    onResizeModeChange: (Int) -> Unit,
-    onVolumeChange: (Float) -> Unit,
-    onMuteToggle: () -> Unit,
-    onNightToggle: () -> Unit
+    onResizeModeChange: (Int) -> Unit
 ) {
     BackHandler(onBack = onDismiss)
     val dialogFocusRequester = remember { FocusRequester() }
@@ -992,8 +941,8 @@ private fun TvPlayerSettingsDialog(
     ) {
         Card(
             modifier = Modifier
-                .fillMaxHeight(0.78f)
-                .widthIn(min = 430.dp, max = 500.dp)
+                .fillMaxHeight(0.5f)
+                .widthIn(min = 360.dp, max = 410.dp)
                 .padding(end = 40.dp),
             shape = RoundedCornerShape(16.dp),
             colors = CardDefaults.cardColors(containerColor = TvPanel),
@@ -1002,28 +951,65 @@ private fun TvPlayerSettingsDialog(
             LazyColumn(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(22.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
+                    .padding(18.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 item {
                     Text(
                         text = "Player Settings",
-                        style = MaterialTheme.typography.headlineMedium,
+                        style = MaterialTheme.typography.titleLarge,
                         color = Color.White,
                         fontWeight = FontWeight.ExtraBold
                     )
-                    Spacer(modifier = Modifier.height(10.dp))
+                    Spacer(modifier = Modifier.height(8.dp))
                 }
 
                 item {
+                    DialogSectionHeader(icon = Icons.Rounded.Brightness6, title = "Screen Brightness")
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Slider(
+                        value = screenBrightness,
+                        onValueChange = onBrightnessChange,
+                        valueRange = 0.05f..1f,
+                        colors = SliderDefaults.colors(
+                            thumbColor = TvAccent,
+                            activeTrackColor = TvAccent,
+                            inactiveTrackColor = Color.White.copy(alpha = 0.18f)
+                        )
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        TvSettingsChip(
+                            label = "Down",
+                            selected = false,
+                            focusRequester = firstSettingFocusRequester,
+                            onClick = onBrightnessDown
+                        )
+                        TvSettingsChip(
+                            label = "Up",
+                            selected = false,
+                            onClick = onBrightnessUp
+                        )
+                        Text(
+                            text = "${(screenBrightness * 100).toInt()}%",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier
+                                .heightIn(min = 52.dp)
+                                .padding(horizontal = 8.dp, vertical = 14.dp)
+                        )
+                    }
+                }
+
+                item {
+                    Spacer(modifier = Modifier.height(8.dp))
                     DialogSectionHeader(icon = Icons.Rounded.Speed, title = "Playback Speed")
-                    Spacer(modifier = Modifier.height(10.dp))
+                    Spacer(modifier = Modifier.height(8.dp))
                     TvOptionFlow {
-                        playbackSpeedOptions.forEachIndexed { index, speed ->
+                        playbackSpeedOptions.forEach { speed ->
                             TvSettingsChip(
                                 label = if (speed == 1.0f) "Normal" else "${speed}x",
                                 selected = playbackSpeed == speed,
-                                focusRequester = firstSettingFocusRequester.takeIf { index == 0 },
                                 onClick = { onSpeedChange(speed) }
                             )
                         }
@@ -1031,9 +1017,9 @@ private fun TvPlayerSettingsDialog(
                 }
 
                 item {
-                    Spacer(modifier = Modifier.height(16.dp))
+                    Spacer(modifier = Modifier.height(8.dp))
                     DialogSectionHeader(icon = Icons.Rounded.AspectRatio, title = "Aspect Ratio")
-                    Spacer(modifier = Modifier.height(10.dp))
+                    Spacer(modifier = Modifier.height(8.dp))
                     TvOptionFlow {
                         resizeModeOptions.forEach { (mode, label) ->
                             TvSettingsChip(
@@ -1046,95 +1032,14 @@ private fun TvPlayerSettingsDialog(
                 }
 
                 item {
-                    Spacer(modifier = Modifier.height(16.dp))
-                    DialogSectionHeader(
-                        icon = if (isMuted) Icons.Rounded.VolumeOff else Icons.Rounded.VolumeUp,
-                        title = "Volume"
-                    )
-                    Spacer(modifier = Modifier.height(10.dp))
-                    Slider(
-                        value = volume,
-                        onValueChange = onVolumeChange,
-                        colors = SliderDefaults.colors(
-                            thumbColor = TvAccent,
-                            activeTrackColor = TvAccent,
-                            inactiveTrackColor = Color.White.copy(alpha = 0.18f)
-                        )
-                    )
-                    TvOptionFlow {
-                        TvSettingsChip(
-                            label = if (isMuted) "Unmute" else "Mute",
-                            selected = isMuted,
-                            onClick = onMuteToggle
-                        )
-                        TvSettingsChip(
-                            label = "Night Mode",
-                            selected = isNightMode,
-                            onClick = onNightToggle
-                        )
-                    }
-                }
-
-                item {
-                    Spacer(modifier = Modifier.height(16.dp))
-                    DialogSectionHeader(icon = Icons.Rounded.Audiotrack, title = "Audio Tracks")
-                }
-
-                if (audioTracks.isEmpty()) {
-                    item { DialogHint("No alternate audio tracks") }
-                } else {
-                    items(audioTracks, key = { it.id }) { track ->
-                        TvTrackOption(
-                            label = track.displayLabel,
-                            selected = track.isSelected,
-                            onClick = { onAudioSelect(track.id) }
-                        )
-                    }
-                }
-
-                item {
-                    Spacer(modifier = Modifier.height(18.dp))
-                    DialogSectionHeader(icon = Icons.Rounded.Subtitles, title = "Subtitles")
-                }
-
-                item {
-                    TvTrackOption(
-                        label = "Off",
-                        selected = subtitleTracks.none { it.isSelected },
-                        onClick = { onSubtitleSelect(null) }
-                    )
-                }
-
-                items(subtitleTracks, key = { it.id }) { track ->
-                    TvTrackOption(
-                        label = track.displayLabel,
-                        selected = track.isSelected,
-                        onClick = { onSubtitleSelect(track.id) }
-                    )
-                }
-
-                item {
-                    Spacer(modifier = Modifier.height(18.dp))
-                    DialogSectionHeader(icon = Icons.Rounded.Subtitles, title = "Subtitle Size")
-                }
-
-                items(SubtitleSize.entries, key = { it.name }) { size ->
-                    TvTrackOption(
-                        label = size.name,
-                        selected = selectedSubtitleSize == size,
-                        onClick = { onSubtitleSizeChange(size) }
-                    )
-                }
-
-                item {
-                    Spacer(modifier = Modifier.height(12.dp))
+                    Spacer(modifier = Modifier.height(8.dp))
                     Button(
                         onClick = onDismiss,
                         colors = ButtonDefaults.buttonColors(containerColor = TvAccent),
                         modifier = Modifier.fillMaxWidth(),
-                        contentPadding = PaddingValues(vertical = 16.dp)
+                        contentPadding = PaddingValues(vertical = 12.dp)
                     ) {
-                        Text("Close", style = MaterialTheme.typography.titleLarge)
+                        Text("Close", style = MaterialTheme.typography.titleMedium)
                     }
                 }
             }
