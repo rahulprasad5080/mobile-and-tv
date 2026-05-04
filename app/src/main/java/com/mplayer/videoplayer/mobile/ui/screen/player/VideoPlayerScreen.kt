@@ -48,6 +48,9 @@ import com.mplayer.videoplayer.mobile.viewmodel.MobilePlayerViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import androidx.compose.ui.window.DialogProperties
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.compose.ui.platform.LocalLifecycleOwner
@@ -106,6 +109,32 @@ fun VideoPlayerScreen(
 
     LaunchedEffect(orientationMode) {
         (context as? Activity)?.requestedOrientation = orientationMode
+    }
+
+    LaunchedEffect(showControls) {
+        if (!showControls) {
+            showSettings = false
+            showAudioDialog = false
+            showVolumeDialog = false
+            showSubtitleDialog = false
+        }
+    }
+
+    DisposableEffect(context, showControls, isInPipMode) {
+        val window = (context as? Activity)?.window
+        val controller = window?.let { WindowCompat.getInsetsController(it, it.decorView) }
+        if (window != null && controller != null) {
+            controller.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            if (!showControls && !isInPipMode) {
+                controller.hide(WindowInsetsCompat.Type.systemBars())
+            } else {
+                controller.show(WindowInsetsCompat.Type.systemBars())
+            }
+        }
+
+        onDispose {
+            controller?.show(WindowInsetsCompat.Type.systemBars())
+        }
     }
 
     DisposableEffect(context, isPlaying, isInPipMode) {

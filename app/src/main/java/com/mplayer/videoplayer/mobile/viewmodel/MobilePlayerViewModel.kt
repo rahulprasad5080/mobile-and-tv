@@ -22,6 +22,10 @@ import kotlinx.coroutines.launch
 
 class MobilePlayerViewModel(application: Application) : AndroidViewModel(application) {
 
+    companion object {
+        private const val CONTROLS_AUTO_HIDE_DELAY_MS = 5_000L
+    }
+
     val playerManager = PlayerManager(application)
     private val audioManager = application.getSystemService(Context.AUDIO_SERVICE) as AudioManager
     private val progressRepository = PlaybackProgressRepository(application)
@@ -102,9 +106,14 @@ class MobilePlayerViewModel(application: Application) : AndroidViewModel(applica
             while (true) {
                 val player = playerManager.getPlayer()
                 if (player != null) {
+                    val wasPlaying = _isPlaying.value
                     _currentPosition.value = player.currentPosition
                     _duration.value = player.duration.coerceAtLeast(0)
                     _isPlaying.value = player.isPlaying
+                    when {
+                        !wasPlaying && player.isPlaying -> resetHideTimer()
+                        wasPlaying && !player.isPlaying -> cancelHideTimer()
+                    }
                 }
                 delay(1000)
             }
@@ -128,8 +137,11 @@ class MobilePlayerViewModel(application: Application) : AndroidViewModel(applica
         hasManualOrientationOverride = false
         _currentPosition.value = startPositionMs.coerceAtLeast(0)
         _duration.value = 0L
+        _isPlaying.value = true
+        _showControls.value = true
         applyDefaultOrientationForVideo(item)
         playerManager.playMedia(item, startPositionMs)
+        resetHideTimer()
     }
 
     fun preloadMedia(item: VideoMediaItem, startPositionMs: Long = 0) {
@@ -140,10 +152,12 @@ class MobilePlayerViewModel(application: Application) : AndroidViewModel(applica
     fun togglePlayPause() {
         if (_isPlaying.value) {
             _isPlaying.value = false
+            cancelHideTimer()
             playerManager.pause()
         } else {
             _isPlaying.value = true
             playerManager.resume()
+            resetHideTimer()
         }
     }
 
@@ -183,15 +197,25 @@ class MobilePlayerViewModel(application: Application) : AndroidViewModel(applica
         _showControls.value = !_showControls.value
         if (_showControls.value) {
             resetHideTimer()
+        } else {
+            cancelHideTimer()
         }
     }
 
     fun resetHideTimer() {
         hideJob?.cancel()
+        if (!_showControls.value || _isLocked.value || _isInPipMode.value || !_isPlaying.value) return
         hideJob = viewModelScope.launch {
-            delay(3500)
-            _showControls.value = false
+            delay(CONTROLS_AUTO_HIDE_DELAY_MS)
+            if (_isPlaying.value && !_isLocked.value && !_isInPipMode.value) {
+                _showControls.value = false
+            }
         }
+    }
+
+    private fun cancelHideTimer() {
+        hideJob?.cancel()
+        hideJob = null
     }
 
     fun adjustVolume(delta: Float) {
@@ -230,7 +254,10 @@ class MobilePlayerViewModel(application: Application) : AndroidViewModel(applica
     fun toggleLock() {
         _isLocked.value = !_isLocked.value
         if (_isLocked.value) {
+            cancelHideTimer()
             _showControls.value = false
+        } else {
+            resetHideTimer()
         }
     }
 
@@ -306,7 +333,10 @@ class MobilePlayerViewModel(application: Application) : AndroidViewModel(applica
     fun setPipMode(inPipMode: Boolean) {
         _isInPipMode.value = inPipMode
         if (inPipMode) {
+            cancelHideTimer()
             _showControls.value = false
+        } else {
+            resetHideTimer()
         }
     }
 
@@ -314,6 +344,7 @@ class MobilePlayerViewModel(application: Application) : AndroidViewModel(applica
         currentVideo?.let {
             progressRepository.saveProgress(it.id, playerManager.getPlayer()?.currentPosition ?: 0L)
         }
+        cancelHideTimer()
         playerManager.pause()
         releaseJob?.cancel()
         releaseJob = viewModelScope.launch {
@@ -323,6 +354,7 @@ class MobilePlayerViewModel(application: Application) : AndroidViewModel(applica
     }
 
     override fun onCleared() {
+        cancelHideTimer()
         releaseJob?.cancel()
         currentVideo?.let {
             progressRepository.saveProgress(it.id, playerManager.getPlayer()?.currentPosition ?: 0L)
