@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -26,17 +27,22 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ArrowBack
+import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.Folder
 import androidx.compose.material.icons.rounded.GridView
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.Movie
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -82,6 +88,9 @@ fun TvBrowseScreen(
 ) {
     val videos by viewModel.videos.collectAsState()
     var selectedFolder by remember { mutableStateOf<TvFolderModel?>(null) }
+    var videoToRename by remember { mutableStateOf<VideoMediaItem?>(null) }
+    var renameText by remember { mutableStateOf("") }
+    var videoToDelete by remember { mutableStateOf<VideoMediaItem?>(null) }
     val folders = remember(videos) { buildFolders(videos) }
     val firstItemFocusRequester = remember { FocusRequester() }
 
@@ -117,10 +126,68 @@ fun TvBrowseScreen(
                 VideoList(
                     videos = selectedFolder?.videos.orEmpty(),
                     firstItemFocusRequester = firstItemFocusRequester,
-                    onVideoClick = onVideoClick
+                    onVideoClick = onVideoClick,
+                    onRenameClick = { video ->
+                        videoToRename = video
+                        renameText = video.title
+                    },
+                    onDeleteClick = { videoToDelete = it }
                 )
             }
         }
+    }
+
+    videoToRename?.let { video ->
+        AlertDialog(
+            onDismissRequest = { videoToRename = null },
+            title = { Text("Rename Video") },
+            text = {
+                OutlinedTextField(
+                    value = renameText,
+                    onValueChange = { renameText = it },
+                    singleLine = true,
+                    label = { Text("Video name") }
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        viewModel.renameVideo(video, renameText)
+                        videoToRename = null
+                    }
+                ) {
+                    Text("Rename")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { videoToRename = null }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
+    videoToDelete?.let { video ->
+        AlertDialog(
+            onDismissRequest = { videoToDelete = null },
+            title = { Text("Delete Video") },
+            text = { Text("Delete '${video.title}' from this device?") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        viewModel.deleteVideo(video)
+                        videoToDelete = null
+                    }
+                ) {
+                    Text("Delete", color = Color(0xFFC62828))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { videoToDelete = null }) {
+                    Text("Cancel")
+                }
+            }
+        )
     }
 }
 
@@ -205,7 +272,9 @@ private fun FolderList(
 private fun VideoList(
     videos: List<VideoMediaItem>,
     firstItemFocusRequester: FocusRequester,
-    onVideoClick: (VideoMediaItem) -> Unit
+    onVideoClick: (VideoMediaItem) -> Unit,
+    onRenameClick: (VideoMediaItem) -> Unit,
+    onDeleteClick: (VideoMediaItem) -> Unit
 ) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -216,7 +285,9 @@ private fun VideoList(
             VideoRow(
                 video = video,
                 focusRequester = firstItemFocusRequester.takeIf { index == 0 },
-                onClick = { onVideoClick(video) }
+                onClick = { onVideoClick(video) },
+                onRenameClick = { onRenameClick(video) },
+                onDeleteClick = { onDeleteClick(video) }
             )
         }
     }
@@ -252,7 +323,9 @@ private fun FolderRow(
 private fun VideoRow(
     video: VideoMediaItem,
     focusRequester: FocusRequester?,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    onRenameClick: () -> Unit,
+    onDeleteClick: () -> Unit
 ) {
     FileListRow(
         focusRequester = focusRequester,
@@ -276,7 +349,15 @@ private fun VideoRow(
         },
         title = video.title,
         subtitle = video.description,
-        trailing = video.mimeType?.substringAfterLast('/')?.uppercase().orEmpty()
+        trailing = video.mimeType?.substringAfterLast('/')?.uppercase().orEmpty(),
+        actions = {
+            IconButton(onClick = onRenameClick, modifier = Modifier.size(44.dp)) {
+                Icon(Icons.Rounded.Edit, contentDescription = "Rename", tint = FileText)
+            }
+            IconButton(onClick = onDeleteClick, modifier = Modifier.size(44.dp)) {
+                Icon(Icons.Rounded.Delete, contentDescription = "Delete", tint = Color(0xFFC62828))
+            }
+        }
     )
 }
 
@@ -287,7 +368,8 @@ private fun FileListRow(
     leading: @Composable () -> Unit,
     title: String,
     subtitle: String,
-    trailing: String
+    trailing: String,
+    actions: (@Composable RowScope.() -> Unit)? = null
 ) {
     var isFocused by remember { mutableStateOf(false) }
     val scale by animateFloatAsState(
@@ -354,6 +436,14 @@ private fun FileListRow(
                     style = MaterialTheme.typography.bodyMedium,
                     color = FileMuted,
                     maxLines = 1
+                )
+            }
+            actions?.let {
+                Spacer(modifier = Modifier.width(12.dp))
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    content = it
                 )
             }
         }

@@ -65,8 +65,10 @@ class MainActivity : ComponentActivity() {
     ) { result ->
         if (result.resultCode == RESULT_OK) {
             homeViewModel.loadVideos()
+            tvBrowseViewModel.loadVideos()
         }
         homeViewModel.clearPendingIntent()
+        tvBrowseViewModel.clearPendingIntent()
     }
 
     private val requestPermissionLauncher = registerForActivityResult(
@@ -96,12 +98,18 @@ class MainActivity : ComponentActivity() {
 
         externalVideoToOpen = intent.toExternalVideoItem()
 
-        if (!isTelevisionDevice()) {
-            lifecycleScope.launch {
-                homeViewModel.pendingIntent.collect { intentSender ->
-                    intentSender?.let {
-                        intentSenderLauncher.launch(IntentSenderRequest.Builder(it).build())
-                    }
+        lifecycleScope.launch {
+            homeViewModel.pendingIntent.collect { intentSender ->
+                intentSender?.let {
+                    intentSenderLauncher.launch(IntentSenderRequest.Builder(it).build())
+                }
+            }
+        }
+
+        lifecycleScope.launch {
+            tvBrowseViewModel.pendingIntent.collect { intentSender ->
+                intentSender?.let {
+                    intentSenderLauncher.launch(IntentSenderRequest.Builder(it).build())
                 }
             }
         }
