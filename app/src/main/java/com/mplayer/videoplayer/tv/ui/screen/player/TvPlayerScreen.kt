@@ -39,8 +39,10 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.AspectRatio
 import androidx.compose.material.icons.rounded.Audiotrack
+import androidx.compose.material.icons.rounded.Brightness6
 import androidx.compose.material.icons.rounded.FastForward
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
@@ -351,19 +353,29 @@ fun TvPlayerScreen(
                     viewModel.increaseVolume()
                     showControls = true
                 },
+                onBrightnessClick = {
+                    isNightMode = !isNightMode
+                    showControls = true
+                },
                 onSettingsClick = { showSettings = true }
             )
         }
 
         AnimatedVisibility(
             visible = showControls,
-            enter = fadeIn() + scaleIn(initialScale = 0.92f),
-            exit = fadeOut() + scaleOut(targetScale = 0.92f),
-            modifier = Modifier.align(Alignment.Center)
+            enter = fadeIn() + slideInVertically { it },
+            exit = fadeOut() + slideOutVertically { it },
+            modifier = Modifier.align(Alignment.BottomCenter)
         ) {
-            TvCenterControls(
+            TvProgressBar(
+                currentPosition = currentPosition,
+                duration = duration,
                 isPlaying = isPlaying,
                 playFocusRequester = playFocusRequester,
+                onSeekTo = {
+                    viewModel.seekTo(it)
+                    showControls = true
+                },
                 onPrevious = {
                     viewModel.playPrevious()
                     showControls = true
@@ -383,21 +395,9 @@ fun TvPlayerScreen(
                 onNext = {
                     viewModel.playNext()
                     showControls = true
-                }
-            )
-        }
-
-        AnimatedVisibility(
-            visible = showControls,
-            enter = fadeIn() + slideInVertically { it },
-            exit = fadeOut() + slideOutVertically { it },
-            modifier = Modifier.align(Alignment.BottomCenter)
-        ) {
-            TvProgressBar(
-                currentPosition = currentPosition,
-                duration = duration,
-                onSeekTo = {
-                    viewModel.seekTo(it)
+                },
+                onZoom = {
+                    viewModel.setResizeMode(nextResizeMode(resizeMode))
                     showControls = true
                 }
             )
@@ -499,67 +499,54 @@ private fun TvPlayerTopBar(
     onVolumeDown: () -> Unit,
     onMuteToggle: () -> Unit,
     onVolumeUp: () -> Unit,
+    onBrightnessClick: () -> Unit,
     onSettingsClick: () -> Unit
 ) {
-    Column(
+    Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 56.dp, vertical = 30.dp)
+            .padding(horizontal = 44.dp, vertical = 26.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
     ) {
         Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
+            modifier = Modifier.weight(1f),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Button(
-                onClick = onBackPressed,
-                colors = ButtonDefaults.buttonColors(containerColor = Color.White.copy(alpha = 0.12f)),
-                contentPadding = PaddingValues(horizontal = 24.dp, vertical = 14.dp)
-            ) {
-                Text("Back", style = MaterialTheme.typography.titleMedium)
-            }
+            TvIconOnlyButton(Icons.Rounded.ArrowBack, "Back", onBackPressed)
+            Spacer(modifier = Modifier.width(18.dp))
 
             Text(
                 text = title,
-                style = MaterialTheme.typography.headlineSmall,
+                style = MaterialTheme.typography.titleSmall,
                 color = Color.White,
-                fontWeight = FontWeight.Bold,
-                maxLines = 1,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(horizontal = 34.dp)
+                modifier = Modifier.weight(1f)
             )
-
-            Button(
-                onClick = onSettingsClick,
-                colors = ButtonDefaults.buttonColors(containerColor = TvAccent),
-                contentPadding = PaddingValues(horizontal = 24.dp, vertical = 14.dp)
-            ) {
-                Icon(Icons.Rounded.Settings, contentDescription = null, modifier = Modifier.size(24.dp))
-                Spacer(modifier = Modifier.width(10.dp))
-                Text("Settings", style = MaterialTheme.typography.titleMedium)
-            }
         }
 
-        Spacer(modifier = Modifier.height(18.dp))
-
         Row(
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            modifier = Modifier.padding(start = 24.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            TvQuickActionButton(Icons.Rounded.Audiotrack, "Audio", onAudioClick)
-            TvQuickActionButton(Icons.Rounded.Subtitles, "Subtitles", onSubtitleClick)
-            TvQuickActionButton(Icons.Rounded.VolumeOff, "Vol -", onVolumeDown)
-            TvQuickActionButton(
+            TvIconOnlyButton(Icons.Rounded.Audiotrack, "Audio track", onAudioClick)
+            TvIconOnlyButton(Icons.Rounded.Subtitles, "Subtitles", onSubtitleClick)
+            TvIconOnlyButton(Icons.Rounded.Brightness6, "Brightness", onBrightnessClick)
+            TvIconOnlyButton(Icons.Rounded.Speed, "Speed settings", onSettingsClick)
+            TvIconOnlyButton(
                 icon = if (isMuted) Icons.Rounded.VolumeOff else Icons.Rounded.VolumeUp,
-                label = if (isMuted) "Unmute" else "Mute",
+                contentDescription = if (isMuted) "Unmute" else "Mute",
                 onClick = onMuteToggle
             )
-            TvQuickActionButton(Icons.Rounded.VolumeUp, "Vol +", onVolumeUp)
+            TvIconOnlyButton(Icons.Rounded.VolumeOff, "Volume down", onVolumeDown)
+            TvIconOnlyButton(Icons.Rounded.VolumeUp, "Volume up", onVolumeUp)
+            TvIconOnlyButton(Icons.Rounded.Settings, "Settings", onSettingsClick)
             Text(
                 text = "${(volume * 100).toInt()}%",
-                style = MaterialTheme.typography.titleMedium,
+                style = MaterialTheme.typography.labelLarge,
                 color = Color.White.copy(alpha = 0.88f),
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier.padding(start = 4.dp)
@@ -569,25 +556,27 @@ private fun TvPlayerTopBar(
 }
 
 @Composable
-private fun TvQuickActionButton(
+private fun TvIconOnlyButton(
     icon: ImageVector,
-    label: String,
+    contentDescription: String,
     onClick: () -> Unit
 ) {
     var isFocused by remember { mutableStateOf(false) }
-    Button(
+    IconButton(
         onClick = onClick,
-        colors = ButtonDefaults.buttonColors(
-            containerColor = if (isFocused) TvAccent else Color.White.copy(alpha = 0.12f)
-        ),
-        contentPadding = PaddingValues(horizontal = 18.dp, vertical = 12.dp),
         modifier = Modifier
+            .size(42.dp)
+            .clip(CircleShape)
+            .background(if (isFocused) TvAccent else Color.White.copy(alpha = 0.12f))
+            .border(
+                width = if (isFocused) 2.dp else 1.dp,
+                color = if (isFocused) Color.White else Color.White.copy(alpha = 0.16f),
+                shape = CircleShape
+            )
             .onFocusChanged { isFocused = it.isFocused }
             .focusable()
     ) {
-        Icon(icon, contentDescription = null, modifier = Modifier.size(22.dp))
-        Spacer(modifier = Modifier.width(8.dp))
-        Text(label, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+        Icon(icon, contentDescription = contentDescription, tint = Color.White, modifier = Modifier.size(23.dp))
     }
 }
 
@@ -650,6 +639,12 @@ private fun TvRoundControlButton(
     onClick: () -> Unit
 ) {
     var isFocused by remember { mutableStateOf(false) }
+    val iconSize = when {
+        emphasized -> 36.dp
+        size <= 52.dp -> 26.dp
+        size <= 60.dp -> 30.dp
+        else -> 42.dp
+    }
     val scale by animateFloatAsState(
         targetValue = if (isFocused) 1.12f else 1f,
         animationSpec = tween(120),
@@ -686,7 +681,7 @@ private fun TvRoundControlButton(
             imageVector = icon,
             contentDescription = contentDescription,
             tint = Color.White,
-            modifier = Modifier.size(if (emphasized) 58.dp else 42.dp)
+            modifier = Modifier.size(iconSize)
         )
     }
 }
@@ -695,12 +690,20 @@ private fun TvRoundControlButton(
 private fun TvProgressBar(
     currentPosition: Long,
     duration: Long,
-    onSeekTo: (Long) -> Unit
+    isPlaying: Boolean,
+    playFocusRequester: FocusRequester,
+    onSeekTo: (Long) -> Unit,
+    onPrevious: () -> Unit,
+    onRewind: () -> Unit,
+    onPlayPause: () -> Unit,
+    onForward: () -> Unit,
+    onNext: () -> Unit,
+    onZoom: () -> Unit
 ) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(start = 72.dp, end = 72.dp, bottom = 54.dp)
+            .padding(start = 58.dp, end = 58.dp, bottom = 34.dp)
     ) {
         Slider(
             value = if (duration > 0) {
@@ -725,11 +728,62 @@ private fun TvProgressBar(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(top = 14.dp),
+                .padding(top = 6.dp),
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Text(formatTime(currentPosition), color = Color.White, style = MaterialTheme.typography.titleMedium)
             Text(formatTime(duration), color = Color.White, style = MaterialTheme.typography.titleMedium)
+        }
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 12.dp),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            TvRoundControlButton(
+                icon = Icons.Rounded.SkipPrevious,
+                contentDescription = "Previous video",
+                size = 50.dp,
+                onClick = onPrevious
+            )
+            Spacer(modifier = Modifier.width(20.dp))
+            TvRoundControlButton(
+                icon = Icons.Rounded.Replay10,
+                contentDescription = "Rewind 10 seconds",
+                size = 56.dp,
+                onClick = onRewind
+            )
+            Spacer(modifier = Modifier.width(20.dp))
+            TvRoundControlButton(
+                icon = if (isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
+                contentDescription = "Play or pause",
+                size = 68.dp,
+                focusRequester = playFocusRequester,
+                emphasized = true,
+                onClick = onPlayPause
+            )
+            Spacer(modifier = Modifier.width(20.dp))
+            TvRoundControlButton(
+                icon = Icons.Rounded.FastForward,
+                contentDescription = "Forward 10 seconds",
+                size = 56.dp,
+                onClick = onForward
+            )
+            Spacer(modifier = Modifier.width(20.dp))
+            TvRoundControlButton(
+                icon = Icons.Rounded.SkipNext,
+                contentDescription = "Next video",
+                size = 50.dp,
+                onClick = onNext
+            )
+            Spacer(modifier = Modifier.width(20.dp))
+            TvRoundControlButton(
+                icon = Icons.Rounded.AspectRatio,
+                contentDescription = "Screen zoom",
+                size = 50.dp,
+                onClick = onZoom
+            )
         }
     }
 }
@@ -816,18 +870,18 @@ private fun TvSidePopup(
     ) {
         Card(
             modifier = Modifier
-                .fillMaxHeight()
-                .widthIn(min = 460.dp, max = 560.dp)
-                .padding(vertical = 50.dp, horizontal = 54.dp),
-            shape = RoundedCornerShape(22.dp),
+                .fillMaxHeight(0.72f)
+                .widthIn(min = 360.dp, max = 430.dp)
+                .padding(end = 40.dp),
+            shape = RoundedCornerShape(16.dp),
             colors = CardDefaults.cardColors(containerColor = TvPanel),
             border = BorderStroke(1.dp, Color.White.copy(alpha = 0.12f))
         ) {
             LazyColumn(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(28.dp),
-                verticalArrangement = Arrangement.spacedBy(14.dp)
+                    .padding(20.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 item {
                     DialogSectionHeader(icon = icon, title = title)
@@ -881,18 +935,18 @@ private fun TvPlayerSettingsDialog(
     ) {
         Card(
             modifier = Modifier
-                .fillMaxHeight()
-                .widthIn(min = 520.dp, max = 620.dp)
-                .padding(vertical = 42.dp, horizontal = 48.dp),
-            shape = RoundedCornerShape(22.dp),
+                .fillMaxHeight(0.78f)
+                .widthIn(min = 430.dp, max = 500.dp)
+                .padding(end = 40.dp),
+            shape = RoundedCornerShape(16.dp),
             colors = CardDefaults.cardColors(containerColor = TvPanel),
             border = BorderStroke(1.dp, Color.White.copy(alpha = 0.12f))
         ) {
             LazyColumn(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(30.dp),
-                verticalArrangement = Arrangement.spacedBy(14.dp)
+                    .padding(22.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 item {
                     Text(
@@ -1131,17 +1185,27 @@ private fun TvTrackOption(
         ),
         modifier = Modifier
             .fillMaxWidth()
-            .heightIn(min = 62.dp)
+            .heightIn(min = 52.dp)
             .graphicsLayer {
                 scaleX = scale
                 scaleY = scale
             }
             .onFocusChanged { isFocused = it.isFocused }
+            .onPreviewKeyEvent { event ->
+                if (event.type == KeyEventType.KeyDown &&
+                    (event.key == Key.DirectionCenter || event.key == Key.Enter)
+                ) {
+                    onClick()
+                    true
+                } else {
+                    false
+                }
+            }
             .focusable()
             .clickable(onClick = onClick)
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 20.dp, vertical = 14.dp),
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 11.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
@@ -1175,6 +1239,12 @@ private val resizeModeOptions: List<Pair<Int, String>> = listOf(
     AspectRatioFrameLayout.RESIZE_MODE_ZOOM to "Zoom",
     AspectRatioFrameLayout.RESIZE_MODE_FILL to "Stretch"
 )
+
+private fun nextResizeMode(currentMode: Int): Int {
+    val modes = resizeModeOptions.map { it.first }
+    val currentIndex = modes.indexOf(currentMode).takeIf { it >= 0 } ?: 0
+    return modes[(currentIndex + 1) % modes.size]
+}
 
 private fun formatTime(ms: Long): String {
     val safeMs = ms.coerceAtLeast(0)
