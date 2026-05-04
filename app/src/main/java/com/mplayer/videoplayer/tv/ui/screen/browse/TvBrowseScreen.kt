@@ -243,7 +243,7 @@ private fun FolderRow(
             }
         },
         title = folder.name,
-        subtitle = folder.path ?: "${folder.videos.size} videos",
+        subtitle = "${folder.videos.size} videos",
         trailing = "${folder.videos.size} videos"
     )
 }
@@ -275,7 +275,7 @@ private fun VideoRow(
             }
         },
         title = video.title,
-        subtitle = video.filePath ?: video.description,
+        subtitle = video.description,
         trailing = video.mimeType?.substringAfterLast('/')?.uppercase().orEmpty()
     )
 }

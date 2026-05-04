@@ -44,7 +44,7 @@ import androidx.compose.material.icons.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.AspectRatio
 import androidx.compose.material.icons.rounded.Audiotrack
 import androidx.compose.material.icons.rounded.Brightness6
-import androidx.compose.material.icons.rounded.FastForward
+import androidx.compose.material.icons.rounded.Forward10
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Replay10
@@ -619,7 +619,7 @@ private fun TvCenterControls(
             onClick = onPlayPause
         )
         TvRoundControlButton(
-            icon = Icons.Rounded.FastForward,
+            icon = Icons.Rounded.Forward10,
             contentDescription = "Forward 10 seconds",
             size = 86.dp,
             onClick = onForward
@@ -638,6 +638,7 @@ private fun TvRoundControlButton(
     icon: ImageVector,
     contentDescription: String,
     size: androidx.compose.ui.unit.Dp,
+    modifier: Modifier = Modifier,
     focusRequester: FocusRequester? = null,
     emphasized: Boolean = false,
     onClick: () -> Unit
@@ -660,6 +661,7 @@ private fun TvRoundControlButton(
         onClick = onClick,
         modifier = Modifier
             .size(size)
+            .then(modifier)
             .then(requesterModifier)
             .graphicsLayer {
                 scaleX = scale
@@ -738,54 +740,54 @@ private fun TvProgressBar(
             Text(formatTime(currentPosition), color = Color.White, style = MaterialTheme.typography.titleMedium)
             Text(formatTime(duration), color = Color.White, style = MaterialTheme.typography.titleMedium)
         }
-        Row(
+        Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(top = 12.dp),
-            horizontalArrangement = Arrangement.Center,
-            verticalAlignment = Alignment.CenterVertically
+                .padding(top = 12.dp)
         ) {
-            TvRoundControlButton(
-                icon = Icons.Rounded.SkipPrevious,
-                contentDescription = "Previous video",
-                size = 46.dp,
-                onClick = onPrevious
-            )
-            Spacer(modifier = Modifier.width(16.dp))
-            TvRoundControlButton(
-                icon = Icons.Rounded.Replay10,
-                contentDescription = "Rewind 10 seconds",
-                size = 52.dp,
-                onClick = onRewind
-            )
-            Spacer(modifier = Modifier.width(16.dp))
-            TvRoundControlButton(
-                icon = if (isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
-                contentDescription = "Play or pause",
-                size = 62.dp,
-                focusRequester = playFocusRequester,
-                emphasized = true,
-                onClick = onPlayPause
-            )
-            Spacer(modifier = Modifier.width(16.dp))
-            TvRoundControlButton(
-                icon = Icons.Rounded.FastForward,
-                contentDescription = "Forward 10 seconds",
-                size = 52.dp,
-                onClick = onForward
-            )
-            Spacer(modifier = Modifier.width(16.dp))
-            TvRoundControlButton(
-                icon = Icons.Rounded.SkipNext,
-                contentDescription = "Next video",
-                size = 46.dp,
-                onClick = onNext
-            )
-            Spacer(modifier = Modifier.width(16.dp))
+            Row(
+                modifier = Modifier.align(Alignment.Center),
+                horizontalArrangement = Arrangement.spacedBy(14.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                TvRoundControlButton(
+                    icon = Icons.Rounded.SkipPrevious,
+                    contentDescription = "Previous video",
+                    size = 44.dp,
+                    onClick = onPrevious
+                )
+                TvRoundControlButton(
+                    icon = Icons.Rounded.Replay10,
+                    contentDescription = "Rewind 10 seconds",
+                    size = 48.dp,
+                    onClick = onRewind
+                )
+                TvRoundControlButton(
+                    icon = if (isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
+                    contentDescription = "Play or pause",
+                    size = 58.dp,
+                    focusRequester = playFocusRequester,
+                    emphasized = true,
+                    onClick = onPlayPause
+                )
+                TvRoundControlButton(
+                    icon = Icons.Rounded.Forward10,
+                    contentDescription = "Forward 10 seconds",
+                    size = 48.dp,
+                    onClick = onForward
+                )
+                TvRoundControlButton(
+                    icon = Icons.Rounded.SkipNext,
+                    contentDescription = "Next video",
+                    size = 44.dp,
+                    onClick = onNext
+                )
+            }
             TvRoundControlButton(
                 icon = Icons.Rounded.AspectRatio,
                 contentDescription = "Screen zoom",
-                size = 46.dp,
+                size = 44.dp,
+                modifier = Modifier.align(Alignment.CenterEnd),
                 onClick = onZoom
             )
         }
