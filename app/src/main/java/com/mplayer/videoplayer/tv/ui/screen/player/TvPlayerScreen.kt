@@ -36,6 +36,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -52,6 +53,7 @@ import androidx.compose.material.icons.rounded.SkipNext
 import androidx.compose.material.icons.rounded.SkipPrevious
 import androidx.compose.material.icons.rounded.Speed
 import androidx.compose.material.icons.rounded.Subtitles
+import androidx.compose.material.icons.rounded.VolumeDown
 import androidx.compose.material.icons.rounded.VolumeOff
 import androidx.compose.material.icons.rounded.VolumeUp
 import androidx.compose.material3.FilterChip
@@ -138,6 +140,7 @@ fun TvPlayerScreen(
     var subtitleSize by remember { mutableStateOf(SubtitleSize.Medium) }
     val rootFocusRequester = remember { FocusRequester() }
     val playFocusRequester = remember { FocusRequester() }
+    val isModalOpen = showSettings || showAudioPopup || showSubtitlePopup
 
     val lifecycleOwner = LocalLifecycleOwner.current
     var wasPlayingBeforePause by remember { mutableStateOf(false) }
@@ -184,17 +187,17 @@ fun TvPlayerScreen(
         }
     }
 
-    LaunchedEffect(showControls, showSettings, showAudioPopup, showSubtitlePopup, isPlaying, currentPosition) {
-        if (showControls && !showSettings && !showAudioPopup && !showSubtitlePopup && isPlaying) {
+    LaunchedEffect(showControls, isModalOpen, isPlaying) {
+        if (showControls && !isModalOpen && isPlaying) {
             delay(4_000)
             showControls = false
         }
     }
 
-    LaunchedEffect(showControls) {
-        if (showControls) {
+    LaunchedEffect(showControls, isModalOpen) {
+        if (showControls && !isModalOpen) {
             runCatching { playFocusRequester.requestFocus() }
-        } else {
+        } else if (!isModalOpen) {
             runCatching { rootFocusRequester.requestFocus() }
         }
     }
@@ -208,6 +211,7 @@ fun TvPlayerScreen(
             .background(Color.Black)
             .onPreviewKeyEvent { event ->
                 if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                if (isModalOpen) return@onPreviewKeyEvent false
                 when (event.key) {
                     Key.MediaPlayPause,
                     Key.Spacebar -> {
@@ -255,7 +259,7 @@ fun TvPlayerScreen(
                         }
                     }
                     Key.DirectionLeft -> {
-                        if (!showControls) {
+                        if (!showControls || event.nativeKeyEvent.repeatCount > 0) {
                             viewModel.seekBy(-10_000)
                             showControls = true
                             true
@@ -264,7 +268,7 @@ fun TvPlayerScreen(
                         }
                     }
                     Key.DirectionRight -> {
-                        if (!showControls) {
+                        if (!showControls || event.nativeKeyEvent.repeatCount > 0) {
                             viewModel.seekBy(10_000)
                             showControls = true
                             true
@@ -541,7 +545,7 @@ private fun TvPlayerTopBar(
                 contentDescription = if (isMuted) "Unmute" else "Mute",
                 onClick = onMuteToggle
             )
-            TvIconOnlyButton(Icons.Rounded.VolumeOff, "Volume down", onVolumeDown)
+            TvIconOnlyButton(Icons.Rounded.VolumeDown, "Volume down", onVolumeDown)
             TvIconOnlyButton(Icons.Rounded.VolumeUp, "Volume up", onVolumeUp)
             TvIconOnlyButton(Icons.Rounded.Settings, "Settings", onSettingsClick)
             Text(
@@ -565,7 +569,7 @@ private fun TvIconOnlyButton(
     IconButton(
         onClick = onClick,
         modifier = Modifier
-            .size(42.dp)
+            .size(38.dp)
             .clip(CircleShape)
             .background(if (isFocused) TvAccent else Color.White.copy(alpha = 0.12f))
             .border(
@@ -576,7 +580,7 @@ private fun TvIconOnlyButton(
             .onFocusChanged { isFocused = it.isFocused }
             .focusable()
     ) {
-        Icon(icon, contentDescription = contentDescription, tint = Color.White, modifier = Modifier.size(23.dp))
+        Icon(icon, contentDescription = contentDescription, tint = Color.White, modifier = Modifier.size(20.dp))
     }
 }
 
@@ -640,10 +644,10 @@ private fun TvRoundControlButton(
 ) {
     var isFocused by remember { mutableStateOf(false) }
     val iconSize = when {
-        emphasized -> 36.dp
-        size <= 52.dp -> 26.dp
-        size <= 60.dp -> 30.dp
-        else -> 42.dp
+        emphasized -> 32.dp
+        size <= 48.dp -> 23.dp
+        size <= 54.dp -> 27.dp
+        else -> 36.dp
     }
     val scale by animateFloatAsState(
         targetValue = if (isFocused) 1.12f else 1f,
@@ -744,44 +748,44 @@ private fun TvProgressBar(
             TvRoundControlButton(
                 icon = Icons.Rounded.SkipPrevious,
                 contentDescription = "Previous video",
-                size = 50.dp,
+                size = 46.dp,
                 onClick = onPrevious
             )
-            Spacer(modifier = Modifier.width(20.dp))
+            Spacer(modifier = Modifier.width(16.dp))
             TvRoundControlButton(
                 icon = Icons.Rounded.Replay10,
                 contentDescription = "Rewind 10 seconds",
-                size = 56.dp,
+                size = 52.dp,
                 onClick = onRewind
             )
-            Spacer(modifier = Modifier.width(20.dp))
+            Spacer(modifier = Modifier.width(16.dp))
             TvRoundControlButton(
                 icon = if (isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
                 contentDescription = "Play or pause",
-                size = 68.dp,
+                size = 62.dp,
                 focusRequester = playFocusRequester,
                 emphasized = true,
                 onClick = onPlayPause
             )
-            Spacer(modifier = Modifier.width(20.dp))
+            Spacer(modifier = Modifier.width(16.dp))
             TvRoundControlButton(
                 icon = Icons.Rounded.FastForward,
                 contentDescription = "Forward 10 seconds",
-                size = 56.dp,
+                size = 52.dp,
                 onClick = onForward
             )
-            Spacer(modifier = Modifier.width(20.dp))
+            Spacer(modifier = Modifier.width(16.dp))
             TvRoundControlButton(
                 icon = Icons.Rounded.SkipNext,
                 contentDescription = "Next video",
-                size = 50.dp,
+                size = 46.dp,
                 onClick = onNext
             )
-            Spacer(modifier = Modifier.width(20.dp))
+            Spacer(modifier = Modifier.width(16.dp))
             TvRoundControlButton(
                 icon = Icons.Rounded.AspectRatio,
                 contentDescription = "Screen zoom",
-                size = 50.dp,
+                size = 46.dp,
                 onClick = onZoom
             )
         }
@@ -795,15 +799,23 @@ private fun TvAudioTracksPopup(
     onAudioSelect: (String) -> Unit
 ) {
     BackHandler(onBack = onDismiss)
+    val firstOptionFocusRequester = remember { FocusRequester() }
+
+    LaunchedEffect(audioTracks) {
+        if (audioTracks.isNotEmpty()) {
+            runCatching { firstOptionFocusRequester.requestFocus() }
+        }
+    }
 
     TvSidePopup(title = "Audio Tracks", icon = Icons.Rounded.Audiotrack, onDismiss = onDismiss) {
         if (audioTracks.isEmpty()) {
             item { DialogHint("No alternate audio tracks") }
         } else {
-            items(audioTracks, key = { it.id }) { track ->
+            itemsIndexed(audioTracks, key = { _, track -> track.id }) { index, track ->
                 TvTrackOption(
                     label = track.displayLabel,
                     selected = track.isSelected,
+                    focusRequester = firstOptionFocusRequester.takeIf { index == 0 },
                     onClick = { onAudioSelect(track.id) }
                 )
             }
@@ -820,6 +832,11 @@ private fun TvSubtitleTracksPopup(
     onSubtitleSizeChange: (SubtitleSize) -> Unit
 ) {
     BackHandler(onBack = onDismiss)
+    val firstOptionFocusRequester = remember { FocusRequester() }
+
+    LaunchedEffect(Unit) {
+        runCatching { firstOptionFocusRequester.requestFocus() }
+    }
 
     TvSidePopup(title = "Subtitles", icon = Icons.Rounded.Subtitles, onDismiss = onDismiss) {
         item {
@@ -828,6 +845,7 @@ private fun TvSubtitleTracksPopup(
             TvTrackOption(
                 label = "Off",
                 selected = subtitleTracks.none { it.isSelected },
+                focusRequester = firstOptionFocusRequester,
                 onClick = { onSubtitleSelect(null) }
             )
         }
@@ -862,10 +880,30 @@ private fun TvSidePopup(
     onDismiss: () -> Unit,
     content: androidx.compose.foundation.lazy.LazyListScope.() -> Unit
 ) {
+    val popupFocusRequester = remember { FocusRequester() }
+
+    LaunchedEffect(Unit) {
+        runCatching { popupFocusRequester.requestFocus() }
+    }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.72f)),
+            .focusRequester(popupFocusRequester)
+            .focusProperties { canFocus = true }
+            .background(Color.Black.copy(alpha = 0.72f))
+            .onPreviewKeyEvent { event ->
+                when {
+                    event.type != KeyEventType.KeyDown -> false
+                    event.key == Key.Back || event.key == Key.Escape -> {
+                        onDismiss()
+                        true
+                    }
+                    else -> false
+                }
+            }
+            .focusable()
+            .clickable(onClick = { }),
         contentAlignment = Alignment.CenterEnd
     ) {
         Card(
@@ -926,11 +964,32 @@ private fun TvPlayerSettingsDialog(
     onNightToggle: () -> Unit
 ) {
     BackHandler(onBack = onDismiss)
+    val dialogFocusRequester = remember { FocusRequester() }
+    val firstSettingFocusRequester = remember { FocusRequester() }
+
+    LaunchedEffect(Unit) {
+        runCatching { dialogFocusRequester.requestFocus() }
+        runCatching { firstSettingFocusRequester.requestFocus() }
+    }
 
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.78f)),
+            .focusRequester(dialogFocusRequester)
+            .focusProperties { canFocus = true }
+            .background(Color.Black.copy(alpha = 0.78f))
+            .onPreviewKeyEvent { event ->
+                when {
+                    event.type != KeyEventType.KeyDown -> false
+                    event.key == Key.Back || event.key == Key.Escape -> {
+                        onDismiss()
+                        true
+                    }
+                    else -> false
+                }
+            }
+            .focusable()
+            .clickable(onClick = { }),
         contentAlignment = Alignment.CenterEnd
     ) {
         Card(
@@ -962,10 +1021,11 @@ private fun TvPlayerSettingsDialog(
                     DialogSectionHeader(icon = Icons.Rounded.Speed, title = "Playback Speed")
                     Spacer(modifier = Modifier.height(10.dp))
                     TvOptionFlow {
-                        playbackSpeedOptions.forEach { speed ->
+                        playbackSpeedOptions.forEachIndexed { index, speed ->
                             TvSettingsChip(
                                 label = if (speed == 1.0f) "Normal" else "${speed}x",
                                 selected = playbackSpeed == speed,
+                                focusRequester = firstSettingFocusRequester.takeIf { index == 0 },
                                 onClick = { onSpeedChange(speed) }
                             )
                         }
@@ -1124,9 +1184,12 @@ private fun TvOptionFlow(content: @Composable () -> Unit) {
 private fun TvSettingsChip(
     label: String,
     selected: Boolean,
+    focusRequester: FocusRequester? = null,
     onClick: () -> Unit
 ) {
     var isFocused by remember { mutableStateOf(false) }
+    val requesterModifier = focusRequester?.let { Modifier.focusRequester(it) } ?: Modifier
+
     FilterChip(
         selected = selected,
         onClick = onClick,
@@ -1154,6 +1217,7 @@ private fun TvSettingsChip(
         shape = RoundedCornerShape(14.dp),
         modifier = Modifier
             .heightIn(min = 52.dp)
+            .then(requesterModifier)
             .onFocusChanged { isFocused = it.isFocused }
             .focusable()
     )
@@ -1163,9 +1227,11 @@ private fun TvSettingsChip(
 private fun TvTrackOption(
     label: String,
     selected: Boolean,
+    focusRequester: FocusRequester? = null,
     onClick: () -> Unit
 ) {
     var isFocused by remember { mutableStateOf(false) }
+    val requesterModifier = focusRequester?.let { Modifier.focusRequester(it) } ?: Modifier
     val scale by animateFloatAsState(
         targetValue = if (isFocused) 1.03f else 1f,
         animationSpec = tween(120),
@@ -1186,6 +1252,7 @@ private fun TvTrackOption(
         modifier = Modifier
             .fillMaxWidth()
             .heightIn(min = 52.dp)
+            .then(requesterModifier)
             .graphicsLayer {
                 scaleX = scale
                 scaleY = scale

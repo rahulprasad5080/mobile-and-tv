@@ -39,7 +39,6 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import android.view.WindowManager
-import android.view.KeyEvent
 import android.app.PictureInPictureParams
 import android.content.res.Configuration
 import android.app.Activity
@@ -122,70 +121,6 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         externalVideoToOpen = intent.toExternalVideoItem()
-    }
-
-    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
-        if (
-            isTelevisionDevice() &&
-            hasStartedTvPlayback &&
-            event.action == KeyEvent.ACTION_DOWN &&
-            handleTvPlayerRemoteKey(event.keyCode)
-        ) {
-            return true
-        }
-        return super.dispatchKeyEvent(event)
-    }
-
-    private fun handleTvPlayerRemoteKey(keyCode: Int): Boolean {
-        return when (keyCode) {
-            KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE,
-            KeyEvent.KEYCODE_SPACE -> {
-                tvPlayerViewModel.togglePlayPause()
-                true
-            }
-            KeyEvent.KEYCODE_MEDIA_PLAY -> {
-                if (!tvPlayerViewModel.isPlaying.value) {
-                    tvPlayerViewModel.togglePlayPause()
-                }
-                true
-            }
-            KeyEvent.KEYCODE_MEDIA_PAUSE -> {
-                if (tvPlayerViewModel.isPlaying.value) {
-                    tvPlayerViewModel.togglePlayPause()
-                }
-                true
-            }
-            KeyEvent.KEYCODE_MEDIA_FAST_FORWARD -> {
-                tvPlayerViewModel.seekBy(10_000)
-                true
-            }
-            KeyEvent.KEYCODE_MEDIA_REWIND -> {
-                tvPlayerViewModel.seekBy(-10_000)
-                true
-            }
-            KeyEvent.KEYCODE_MEDIA_NEXT -> {
-                tvPlayerViewModel.playNext()
-                true
-            }
-            KeyEvent.KEYCODE_MEDIA_PREVIOUS -> {
-                tvPlayerViewModel.playPrevious()
-                true
-            }
-            KeyEvent.KEYCODE_VOLUME_UP -> {
-                tvPlayerViewModel.increaseVolume()
-                true
-            }
-            KeyEvent.KEYCODE_VOLUME_DOWN -> {
-                tvPlayerViewModel.decreaseVolume()
-                true
-            }
-            KeyEvent.KEYCODE_VOLUME_MUTE,
-            KeyEvent.KEYCODE_MUTE -> {
-                tvPlayerViewModel.toggleMute()
-                true
-            }
-            else -> false
-        }
     }
 
     private fun checkAndRequestPermissions() {
