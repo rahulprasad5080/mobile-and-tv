@@ -10,6 +10,7 @@ import com.mplayer.videoplayer.core.model.SubtitleTrackInfo
 import com.mplayer.videoplayer.core.model.VideoMediaItem
 import com.mplayer.videoplayer.core.player.PlayerManager
 import com.mplayer.videoplayer.core.repository.PlaybackProgressRepository
+import com.mplayer.videoplayer.tv.util.cleanTvTitle
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -97,7 +98,7 @@ class TvPlayerViewModel(application: Application) : AndroidViewModel(application
             playlist = listOf(item)
         }
         currentVideo = item
-        _currentTitle.value = item.title
+        _currentTitle.value = item.cleanTvTitle()
         _currentPosition.value = startPositionMs.coerceAtLeast(0)
         _duration.value = 0L
         playerManager.playMedia(item, startPositionMs)
@@ -106,7 +107,7 @@ class TvPlayerViewModel(application: Application) : AndroidViewModel(application
 
     fun preloadMedia(item: VideoMediaItem, startPositionMs: Long = 0) {
         releaseJob?.cancel()
-        _currentTitle.value = item.title
+        _currentTitle.value = item.cleanTvTitle()
         playerManager.preloadMedia(item, startPositionMs)
     }
 

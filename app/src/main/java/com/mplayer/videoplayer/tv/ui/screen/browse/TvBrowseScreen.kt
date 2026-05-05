@@ -78,6 +78,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.layout.aspectRatio
 import coil.compose.rememberAsyncImagePainter
 import com.mplayer.videoplayer.core.model.VideoMediaItem
+import com.mplayer.videoplayer.tv.util.cleanTvTitle
 import com.mplayer.videoplayer.tv.viewmodel.TvBrowseViewModel
 import java.io.File
 import kotlinx.coroutines.delay
@@ -106,7 +107,7 @@ fun TvBrowseScreen(
     
     val filteredVideos = remember(videos, searchQuery) {
         if (searchQuery.isBlank()) videos
-        else videos.filter { it.title.contains(searchQuery, ignoreCase = true) }
+        else videos.filter { it.cleanTvTitle().contains(searchQuery, ignoreCase = true) }
     }
     val folders = remember(filteredVideos) { buildFolders(filteredVideos) }
     val firstItemFocusRequester = remember { FocusRequester() }
@@ -165,7 +166,7 @@ fun TvBrowseScreen(
                         onVideoClick = onVideoClick,
                         onRenameClick = { video ->
                             videoToRename = video
-                            renameText = video.title
+                            renameText = video.cleanTvTitle()
                         },
                         onDeleteClick = { videoToDelete = it }
                     )
@@ -176,7 +177,7 @@ fun TvBrowseScreen(
                         onVideoClick = onVideoClick,
                         onRenameClick = { video ->
                             videoToRename = video
-                            renameText = video.title
+                            renameText = video.cleanTvTitle()
                         },
                         onDeleteClick = { videoToDelete = it }
                     )
@@ -219,7 +220,7 @@ fun TvBrowseScreen(
         AlertDialog(
             onDismissRequest = { videoToDelete = null },
             title = { Text("Delete Video") },
-            text = { Text("Delete '${video.title}' from this device?") },
+            text = { Text("Delete '${video.cleanTvTitle()}' from this device?") },
             confirmButton = {
                 TextButton(
                     onClick = {
@@ -543,9 +544,9 @@ private fun VideoRow(
                 Icon(Icons.Rounded.Movie, contentDescription = null, tint = Color.White, modifier = Modifier.size(24.dp))
             }
         },
-        title = video.title,
+        title = video.cleanTvTitle(),
         subtitle = "",
-        trailing = video.mimeType?.substringAfterLast('/')?.uppercase().orEmpty(),
+        trailing = "",
         actions = {
             TvBrowseIconButton(onClick = onRenameClick, modifier = Modifier.size(44.dp)) {
                 Icon(Icons.Rounded.Edit, contentDescription = "Rename", tint = FileText)
@@ -601,8 +602,8 @@ private fun VideoGridItem(
                 Icon(Icons.Rounded.Movie, contentDescription = null, tint = Color.White, modifier = Modifier.size(32.dp))
             }
         },
-        title = video.title,
-        subtitle = video.mimeType?.substringAfterLast('/')?.uppercase().orEmpty(),
+        title = video.cleanTvTitle(),
+        subtitle = "",
         actions = {
             TvBrowseIconButton(onClick = onRenameClick, modifier = Modifier.size(36.dp)) {
                 Icon(Icons.Rounded.Edit, contentDescription = "Rename", tint = FileText, modifier = Modifier.size(18.dp))
@@ -799,7 +800,7 @@ private fun buildFolders(videos: List<VideoMediaItem>): List<TvFolderModel> {
             TvFolderModel(
                 name = path?.let { File(it).name }?.takeIf { it.isNotBlank() } ?: pathOrName,
                 path = path,
-                videos = folderVideos.sortedBy { it.title.lowercase() }
+                videos = folderVideos.sortedBy { it.cleanTvTitle().lowercase() }
             )
         }
         .sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.name })
