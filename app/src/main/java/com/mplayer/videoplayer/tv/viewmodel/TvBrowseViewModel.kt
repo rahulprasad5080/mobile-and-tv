@@ -104,13 +104,35 @@ class TvBrowseViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun handleIntentSenderResult(success: Boolean) {
-        if (!success) {
-            pendingDeleteId?.let { _deletedIds.value = _deletedIds.value - it }
-            pendingRenameId?.let { _renamedItems.value = _renamedItems.value - it }
-        }
+        val pRenameId = pendingRenameId
+        val pDeleteId = pendingDeleteId
         pendingDeleteId = null
         pendingRenameId = null
-        loadVideos()
+
+        if (!success) {
+            pDeleteId?.let { _deletedIds.value = _deletedIds.value - it }
+            pRenameId?.let { _renamedItems.value = _renamedItems.value - it }
+            loadVideos()
+        } else {
+            if (pRenameId != null) {
+                val newName = _renamedItems.value[pRenameId]
+                val video = _videos.value.find { it.id == pRenameId }
+                if (newName != null && video != null) {
+                    viewModelScope.launch {
+                        try {
+                            fileRepository.renameVideo(getApplication(), video.uri, newName)
+                        } catch (_: Exception) {
+                            _renamedItems.value = _renamedItems.value - pRenameId
+                        }
+                        loadVideos()
+                    }
+                } else {
+                    loadVideos()
+                }
+            } else {
+                loadVideos()
+            }
+        }
     }
 
     fun startMediaStoreObserver() {

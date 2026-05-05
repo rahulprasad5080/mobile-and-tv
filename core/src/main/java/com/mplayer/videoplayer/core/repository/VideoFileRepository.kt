@@ -60,8 +60,21 @@ class VideoFileRepository {
     suspend fun renameVideo(context: Context, uri: Uri, newName: String): IntentSender? {
         return withContext(Dispatchers.IO) {
             val oldPath = getPathFromUri(context, uri)
+            val oldFileName = getFileNameFromUri(context, uri)
+            var finalName = newName
+
+            val extension = oldFileName?.substringAfterLast('.', "")
+                ?.takeIf { it.isNotEmpty() && oldFileName.contains('.') }
+                ?: oldPath?.substringAfterLast('.', "")
+                ?.takeIf { it.isNotEmpty() && oldPath.contains('.') }
+                ?: ""
+
+            if (extension.isNotBlank() && !newName.endsWith(".$extension", ignoreCase = true)) {
+                finalName = "$newName.$extension"
+            }
+
             val contentValues = ContentValues().apply {
-                put(MediaStore.Video.Media.DISPLAY_NAME, newName)
+                put(MediaStore.Video.Media.DISPLAY_NAME, finalName)
             }
             try {
                 context.contentResolver.update(uri, contentValues, null, null)
