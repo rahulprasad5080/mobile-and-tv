@@ -286,7 +286,7 @@ class PlayerManager(private val context: Context) {
     }
 
     private fun buildAudioTrackLabel(label: String?, language: String?, channelCount: Int): String {
-        val baseLabel = label?.takeIf { it.isNotBlank() && !it.equals("X-MATROSKA", ignoreCase = true) } ?: resolveLanguageName(language)
+        val baseLabel = label?.takeIf { it.isNotBlank() && !it.contains("MATROSKA", ignoreCase = true) } ?: resolveLanguageName(language)
         val channelLabel = resolveChannelLabel(channelCount)
         return if (channelLabel != null) "$baseLabel ($channelLabel)" else baseLabel
     }
@@ -301,7 +301,7 @@ class PlayerManager(private val context: Context) {
     }
 
     private fun buildSubtitleTrackLabel(label: String?, language: String?): String {
-        val baseLabel = label?.takeIf { it.isNotBlank() && !it.equals("X-MATROSKA", ignoreCase = true) } ?: resolveLanguageName(language)
+        val baseLabel = label?.takeIf { it.isNotBlank() && !it.contains("MATROSKA", ignoreCase = true) } ?: resolveLanguageName(language)
         return if (baseLabel.contains("subtitle", ignoreCase = true)) {
             baseLabel
         } else {
