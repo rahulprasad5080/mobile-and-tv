@@ -63,10 +63,9 @@ class MainActivity : ComponentActivity() {
     private val intentSenderLauncher = registerForActivityResult(
         ActivityResultContracts.StartIntentSenderForResult()
     ) { result ->
-        if (result.resultCode == RESULT_OK) {
-            homeViewModel.loadVideos()
-            tvBrowseViewModel.loadVideos()
-        }
+        val success = result.resultCode == RESULT_OK
+        homeViewModel.handleIntentSenderResult(success)
+        tvBrowseViewModel.handleIntentSenderResult(success)
         homeViewModel.clearPendingIntent()
         tvBrowseViewModel.clearPendingIntent()
     }

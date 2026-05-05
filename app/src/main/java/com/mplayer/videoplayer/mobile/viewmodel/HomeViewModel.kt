@@ -52,6 +52,9 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private val _deletedIds = MutableStateFlow<Set<String>>(emptySet())
     private val _renamedItems = MutableStateFlow<Map<String, String>>(emptyMap())
 
+    private var pendingDeleteId: String? = null
+    private var pendingRenameId: String? = null
+
     private val _copiedVideo = MutableStateFlow<VideoMediaItem?>(null)
     val copiedVideo: StateFlow<VideoMediaItem?> = _copiedVideo.asStateFlow()
 
@@ -174,16 +177,18 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun deleteVideo(video: VideoMediaItem) {
+        _deletedIds.value = _deletedIds.value + video.id
         viewModelScope.launch {
             try {
                 val intentSender = fileRepository.deleteVideo(getApplication(), video.uri)
                 if (intentSender != null) {
+                    pendingDeleteId = video.id
                     _pendingIntent.value = intentSender
                 } else {
-                    _deletedIds.value = _deletedIds.value + video.id
                     loadVideos()
                 }
             } catch (e: Exception) {
+                _deletedIds.value = _deletedIds.value - video.id
                 loadVideos()
             }
         }
@@ -196,7 +201,10 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             try {
                 val intentSender = fileRepository.renameVideo(getApplication(), video.uri, newName)
                 if (intentSender != null) {
+                    pendingRenameId = video.id
                     _pendingIntent.value = intentSender
+                } else {
+                    loadVideos()
                 }
             } catch (e: Exception) {
                 _renamedItems.value = _renamedItems.value - video.id
@@ -279,6 +287,16 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
     fun clearPendingIntent() {
         _pendingIntent.value = null
+    }
+
+    fun handleIntentSenderResult(success: Boolean) {
+        if (!success) {
+            pendingDeleteId?.let { _deletedIds.value = _deletedIds.value - it }
+            pendingRenameId?.let { _renamedItems.value = _renamedItems.value - it }
+        }
+        pendingDeleteId = null
+        pendingRenameId = null
+        loadVideos()
     }
 
     override fun onCleared() {

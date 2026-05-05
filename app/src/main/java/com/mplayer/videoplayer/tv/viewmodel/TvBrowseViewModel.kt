@@ -42,6 +42,9 @@ class TvBrowseViewModel(application: Application) : AndroidViewModel(application
 
     private var loadVideosJob: Job? = null
     private var mediaObserver: ContentObserver? = null
+    
+    private var pendingDeleteId: String? = null
+    private var pendingRenameId: String? = null
 
     fun loadVideos() {
         loadVideosJob?.cancel()
@@ -58,16 +61,18 @@ class TvBrowseViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun deleteVideo(video: VideoMediaItem) {
+        _deletedIds.value = _deletedIds.value + video.id
         viewModelScope.launch {
             try {
                 val intentSender = fileRepository.deleteVideo(getApplication(), video.uri)
                 if (intentSender != null) {
+                    pendingDeleteId = video.id
                     _pendingIntent.value = intentSender
                 } else {
-                    _deletedIds.value = _deletedIds.value + video.id
                     loadVideos()
                 }
             } catch (_: Exception) {
+                _deletedIds.value = _deletedIds.value - video.id
                 loadVideos()
             }
         }
@@ -82,6 +87,7 @@ class TvBrowseViewModel(application: Application) : AndroidViewModel(application
             try {
                 val intentSender = fileRepository.renameVideo(getApplication(), video.uri, cleanName)
                 if (intentSender != null) {
+                    pendingRenameId = video.id
                     _pendingIntent.value = intentSender
                 } else {
                     loadVideos()
@@ -95,6 +101,16 @@ class TvBrowseViewModel(application: Application) : AndroidViewModel(application
 
     fun clearPendingIntent() {
         _pendingIntent.value = null
+    }
+
+    fun handleIntentSenderResult(success: Boolean) {
+        if (!success) {
+            pendingDeleteId?.let { _deletedIds.value = _deletedIds.value - it }
+            pendingRenameId?.let { _renamedItems.value = _renamedItems.value - it }
+        }
+        pendingDeleteId = null
+        pendingRenameId = null
+        loadVideos()
     }
 
     fun startMediaStoreObserver() {
