@@ -133,6 +133,7 @@ fun TvPlayerScreen(
     var showSubtitlePopup by remember { mutableStateOf(false) }
     var screenBrightness by remember { mutableStateOf(0.5f) }
     var subtitleSize by remember { mutableStateOf(SubtitleSize.Medium) }
+    var playerView by remember { mutableStateOf<PlayerView?>(null) }
     val rootFocusRequester = remember { FocusRequester() }
     val playFocusRequester = remember { FocusRequester() }
     val isModalOpen = showSettings || showAudioPopup || showSubtitlePopup
@@ -187,6 +188,10 @@ fun TvPlayerScreen(
         activity.window.attributes = activity.window.attributes.apply {
             this.screenBrightness = screenBrightness
         }
+    }
+
+    LaunchedEffect(playerView, subtitleSize) {
+        playerView?.applyNetflixSubtitleStyle(subtitleSize, isTv = true)
     }
 
     LaunchedEffect(showControls, isModalOpen, isPlaying) {
@@ -301,12 +306,16 @@ fun TvPlayerScreen(
                         ViewGroup.LayoutParams.MATCH_PARENT,
                         ViewGroup.LayoutParams.MATCH_PARENT
                     )
+                    playerView = this
                 }
             },
             update = { view ->
-                view.player = player
-                view.resizeMode = resizeMode
-                view.applyNetflixSubtitleStyle(subtitleSize, isTv = true)
+                if (view.player !== player) {
+                    view.player = player
+                }
+                if (view.resizeMode != resizeMode) {
+                    view.resizeMode = resizeMode
+                }
             },
             modifier = Modifier.fillMaxSize()
         )
@@ -512,6 +521,14 @@ private fun TvIconOnlyButton(
                 shape = CircleShape
             )
             .onFocusChanged { isFocused = it.isFocused }
+            .onPreviewKeyEvent { event ->
+                if (event.type == KeyEventType.KeyDown && event.key.isTvSelectKey()) {
+                    onClick()
+                    true
+                } else {
+                    false
+                }
+            }
             .focusable()
     ) {
         Icon(icon, contentDescription = contentDescription, tint = Color.White, modifier = Modifier.size(20.dp))
@@ -607,6 +624,14 @@ private fun TvRoundControlButton(
                 shape = CircleShape
             )
             .onFocusChanged { isFocused = it.isFocused }
+            .onPreviewKeyEvent { event ->
+                if (event.type == KeyEventType.KeyDown && event.key.isTvSelectKey()) {
+                    onClick()
+                    true
+                } else {
+                    false
+                }
+            }
             .focusable()
     ) {
         Icon(
@@ -1071,11 +1096,7 @@ private fun TvSettingsChip(
             .then(requesterModifier)
             .onFocusChanged { isFocused = it.isFocused }
             .onPreviewKeyEvent { event ->
-                if (event.type == KeyEventType.KeyDown &&
-                    (event.key == Key.DirectionCenter ||
-                        event.key == Key.Enter ||
-                        event.key == Key.NumPadEnter)
-                ) {
+                if (event.type == KeyEventType.KeyDown && event.key.isTvSelectKey()) {
                     onClick()
                     true
                 } else {
@@ -1122,11 +1143,7 @@ private fun TvTrackOption(
             }
             .onFocusChanged { isFocused = it.isFocused }
             .onPreviewKeyEvent { event ->
-                if (event.type == KeyEventType.KeyDown &&
-                    (event.key == Key.DirectionCenter ||
-                        event.key == Key.Enter ||
-                        event.key == Key.NumPadEnter)
-                ) {
+                if (event.type == KeyEventType.KeyDown && event.key.isTvSelectKey()) {
                     onClick()
                     true
                 } else {
@@ -1189,4 +1206,10 @@ private fun formatTime(ms: Long): String {
     } else {
         "%02d:%02d".format(minutes, seconds)
     }
+}
+
+private fun Key.isTvSelectKey(): Boolean {
+    return this == Key.DirectionCenter ||
+        this == Key.Enter ||
+        this == Key.NumPadEnter
 }

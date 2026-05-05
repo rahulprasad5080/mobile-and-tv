@@ -4,11 +4,11 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -61,27 +61,33 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
-import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import coil.compose.rememberAsyncImagePainter
 import com.mplayer.videoplayer.core.model.VideoMediaItem
 import com.mplayer.videoplayer.tv.util.cleanTvTitle
 import com.mplayer.videoplayer.tv.viewmodel.TvBrowseViewModel
 import java.io.File
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import androidx.compose.runtime.rememberCoroutineScope
 
 private val FileScreenBackground = Color(0xFFF6F7FB)
 private val FilePanelLine = Color(0xFFE2E5EC)
@@ -112,8 +118,8 @@ fun TvBrowseScreen(
     val folders = remember(filteredVideos) { buildFolders(filteredVideos) }
     val firstItemFocusRequester = remember { FocusRequester() }
 
-    LaunchedEffect(videos, selectedFolder?.name, videoToRename, videoToDelete) {
-        if (videoToRename != null || videoToDelete != null) return@LaunchedEffect
+    LaunchedEffect(filteredVideos, selectedFolder?.path, selectedFolder?.name, isGridView, videoToRename, videoToDelete, showSearch) {
+        if (videoToRename != null || videoToDelete != null || showSearch) return@LaunchedEffect
         delay(120)
         runCatching { firstItemFocusRequester.requestFocus() }
     }
@@ -378,6 +384,7 @@ private fun TvBrowseIconButton(
     content: @Composable () -> Unit
 ) {
     var isFocused by remember { mutableStateOf(false) }
+    val focusManager = LocalFocusManager.current
     IconButton(
         onClick = onClick,
         modifier = modifier
@@ -389,6 +396,20 @@ private fun TvBrowseIconButton(
                 shape = RoundedCornerShape(8.dp)
             )
             .onFocusChanged { isFocused = it.isFocused }
+            .onPreviewKeyEvent { event ->
+                when {
+                    event.type != KeyEventType.KeyDown -> false
+                    event.key.isTvSelectKey() -> {
+                        onClick()
+                        true
+                    }
+                    event.key == Key.DirectionLeft -> focusManager.moveFocus(FocusDirection.Left)
+                    event.key == Key.DirectionRight -> focusManager.moveFocus(FocusDirection.Right)
+                    event.key == Key.DirectionUp -> focusManager.moveFocus(FocusDirection.Up)
+                    event.key == Key.DirectionDown -> focusManager.moveFocus(FocusDirection.Down)
+                    else -> false
+                }
+            }
     ) {
         content()
     }
@@ -405,7 +426,11 @@ private fun FolderList(
         contentPadding = PaddingValues(horizontal = 34.dp, vertical = 18.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
-        itemsIndexed(folders, key = { _, folder -> folder.path ?: folder.name }) { index, folder ->
+        itemsIndexed(
+            items = folders,
+            key = { _, folder -> folder.path ?: folder.name },
+            contentType = { _, _ -> "folder-row" }
+        ) { index, folder ->
             FolderRow(
                 folder = folder,
                 focusRequester = firstItemFocusRequester.takeIf { index == 0 },
@@ -428,7 +453,11 @@ private fun VideoList(
         contentPadding = PaddingValues(horizontal = 34.dp, vertical = 18.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
-        itemsIndexed(videos, key = { _, video -> video.id }) { index, video ->
+        itemsIndexed(
+            items = videos,
+            key = { _, video -> video.id },
+            contentType = { _, _ -> "video-row" }
+        ) { index, video ->
             VideoRow(
                 video = video,
                 focusRequester = firstItemFocusRequester.takeIf { index == 0 },
@@ -453,7 +482,11 @@ private fun FolderGrid(
         horizontalArrangement = Arrangement.spacedBy(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        gridItemsIndexed(folders, key = { _, folder -> folder.path ?: folder.name }) { index, folder ->
+        gridItemsIndexed(
+            items = folders,
+            key = { _, folder -> folder.path ?: folder.name },
+            contentType = { _, _ -> "folder-grid-card" }
+        ) { index, folder ->
             FolderGridItem(
                 folder = folder,
                 focusRequester = firstItemFocusRequester.takeIf { index == 0 },
@@ -478,7 +511,11 @@ private fun VideoGrid(
         horizontalArrangement = Arrangement.spacedBy(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        gridItemsIndexed(videos, key = { _, video -> video.id }) { index, video ->
+        gridItemsIndexed(
+            items = videos,
+            key = { _, video -> video.id },
+            contentType = { _, _ -> "video-grid-card" }
+        ) { index, video ->
             VideoGridItem(
                 video = video,
                 focusRequester = firstItemFocusRequester.takeIf { index == 0 },
@@ -616,6 +653,7 @@ private fun VideoGridItem(
 }
 
 @Composable
+@OptIn(ExperimentalFoundationApi::class)
 private fun FileListRow(
     focusRequester: FocusRequester?,
     onClick: () -> Unit,
@@ -626,6 +664,8 @@ private fun FileListRow(
     actions: (@Composable RowScope.() -> Unit)? = null
 ) {
     var isFocused by remember { mutableStateOf(false) }
+    val bringIntoViewRequester = remember { BringIntoViewRequester() }
+    val coroutineScope = rememberCoroutineScope()
     val scale by animateFloatAsState(
         targetValue = if (isFocused) 1.015f else 1f,
         animationSpec = tween(100),
@@ -645,8 +685,25 @@ private fun FileListRow(
                 scaleY = scale
             }
             .then(requesterModifier)
-            .onFocusChanged { isFocused = it.isFocused }
-            .focusable()
+            .bringIntoViewRequester(bringIntoViewRequester)
+            .onFocusChanged { state ->
+                isFocused = state.isFocused
+                if (state.isFocused) {
+                    coroutineScope.launch {
+                        delay(40)
+                        bringIntoViewRequester.bringIntoView()
+                    }
+                }
+            }
+            .onPreviewKeyEvent { event ->
+                if (event.type == KeyEventType.KeyDown && event.key.isTvSelectKey()) {
+                    onClick()
+                    true
+                } else {
+                    false
+                }
+            }
+            .focusProperties { canFocus = true }
             .clickable(onClick = onClick)
     ) {
         Row(
@@ -697,6 +754,7 @@ private fun FileListRow(
 }
 
 @Composable
+@OptIn(ExperimentalFoundationApi::class)
 private fun FileGridCard(
     focusRequester: FocusRequester?,
     onClick: () -> Unit,
@@ -706,6 +764,8 @@ private fun FileGridCard(
     actions: (@Composable RowScope.() -> Unit)? = null
 ) {
     var isFocused by remember { mutableStateOf(false) }
+    val bringIntoViewRequester = remember { BringIntoViewRequester() }
+    val coroutineScope = rememberCoroutineScope()
     val scale by animateFloatAsState(
         targetValue = if (isFocused) 1.05f else 1f,
         animationSpec = tween(100),
@@ -724,8 +784,25 @@ private fun FileGridCard(
                 scaleY = scale
             }
             .then(requesterModifier)
-            .onFocusChanged { isFocused = it.isFocused }
-            .focusable()
+            .bringIntoViewRequester(bringIntoViewRequester)
+            .onFocusChanged { state ->
+                isFocused = state.isFocused
+                if (state.isFocused) {
+                    coroutineScope.launch {
+                        delay(40)
+                        bringIntoViewRequester.bringIntoView()
+                    }
+                }
+            }
+            .onPreviewKeyEvent { event ->
+                if (event.type == KeyEventType.KeyDown && event.key.isTvSelectKey()) {
+                    onClick()
+                    true
+                } else {
+                    false
+                }
+            }
+            .focusProperties { canFocus = true }
             .clickable(onClick = onClick)
     ) {
         Column(modifier = Modifier.fillMaxWidth().padding(12.dp)) {
@@ -804,4 +881,10 @@ private fun buildFolders(videos: List<VideoMediaItem>): List<TvFolderModel> {
             )
         }
         .sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.name })
+}
+
+private fun Key.isTvSelectKey(): Boolean {
+    return this == Key.DirectionCenter ||
+        this == Key.Enter ||
+        this == Key.NumPadEnter
 }
