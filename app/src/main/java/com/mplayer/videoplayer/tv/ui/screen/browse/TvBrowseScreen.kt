@@ -92,7 +92,8 @@ private val FileFocus = Color(0xFFE8F1FF)
 @Composable
 fun TvBrowseScreen(
     viewModel: TvBrowseViewModel,
-    onVideoClick: (VideoMediaItem) -> Unit
+    onVideoClick: (VideoMediaItem) -> Unit,
+    onPlayAllClick: (List<VideoMediaItem>) -> Unit
 ) {
     val videos by viewModel.videos.collectAsState()
     var selectedFolder by remember { mutableStateOf<TvFolderModel?>(null) }
@@ -100,7 +101,14 @@ fun TvBrowseScreen(
     var renameText by remember { mutableStateOf("") }
     var videoToDelete by remember { mutableStateOf<VideoMediaItem?>(null) }
     var isGridView by remember { mutableStateOf(false) }
-    val folders = remember(videos) { buildFolders(videos) }
+    var searchQuery by remember { mutableStateOf("") }
+    var showSearch by remember { mutableStateOf(false) }
+    
+    val filteredVideos = remember(videos, searchQuery) {
+        if (searchQuery.isBlank()) videos
+        else videos.filter { it.title.contains(searchQuery, ignoreCase = true) }
+    }
+    val folders = remember(filteredVideos) { buildFolders(filteredVideos) }
     val firstItemFocusRequester = remember { FocusRequester() }
 
     LaunchedEffect(videos, selectedFolder?.name, videoToRename, videoToDelete) {
@@ -119,15 +127,20 @@ fun TvBrowseScreen(
                 title = selectedFolder?.name ?: "Folders",
                 subtitle = selectedFolder
                     ?.let { "${it.videos.size} videos" }
-                    ?: "${folders.size} folders, ${videos.size} videos",
+                    ?: "${folders.size} folders, ${filteredVideos.size} videos",
                 showBack = selectedFolder != null,
                 isGridView = isGridView,
                 onBack = { selectedFolder = null },
                 onToggleView = { isGridView = !isGridView },
-                onRefresh = { viewModel.loadVideos() }
+                onRefresh = { viewModel.loadVideos() },
+                onPlayAll = {
+                    val listToPlay = selectedFolder?.videos ?: filteredVideos
+                    if (listToPlay.isNotEmpty()) onPlayAllClick(listToPlay)
+                },
+                onSearchClick = { showSearch = true }
             )
 
-            if (videos.isEmpty()) {
+            if (filteredVideos.isEmpty()) {
                 EmptyLibraryMessage()
             } else if (selectedFolder == null) {
                 if (isGridView) {
@@ -223,6 +236,42 @@ fun TvBrowseScreen(
             }
         )
     }
+
+    if (showSearch) {
+        var tempSearchQuery by remember { mutableStateOf(searchQuery) }
+        AlertDialog(
+            onDismissRequest = { showSearch = false },
+            title = { Text("Search Videos") },
+            text = {
+                OutlinedTextField(
+                    value = tempSearchQuery,
+                    onValueChange = { tempSearchQuery = it },
+                    singleLine = true,
+                    label = { Text("Video title") }
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        searchQuery = tempSearchQuery
+                        showSearch = false
+                    }
+                ) {
+                    Text("Search")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        searchQuery = ""
+                        showSearch = false
+                    }
+                ) {
+                    Text("Clear Search")
+                }
+            }
+        )
+    }
 }
 
 @Composable
@@ -233,7 +282,9 @@ private fun FileToolbar(
     isGridView: Boolean,
     onBack: () -> Unit,
     onToggleView: () -> Unit,
-    onRefresh: () -> Unit
+    onRefresh: () -> Unit,
+    onPlayAll: () -> Unit,
+    onSearchClick: () -> Unit
 ) {
     var showMoreMenu by remember { mutableStateOf(false) }
 
@@ -271,10 +322,10 @@ private fun FileToolbar(
             )
         }
 
-        IconButton(onClick = {}, modifier = Modifier.size(48.dp)) {
+        IconButton(onClick = onPlayAll, modifier = Modifier.size(48.dp)) {
             Icon(Icons.Rounded.PlayArrow, contentDescription = "Play", tint = FileText)
         }
-        IconButton(onClick = {}, modifier = Modifier.size(48.dp)) {
+        IconButton(onClick = onSearchClick, modifier = Modifier.size(48.dp)) {
             Icon(Icons.Rounded.Search, contentDescription = "Search", tint = FileText)
         }
         IconButton(onClick = onToggleView, modifier = Modifier.size(48.dp)) {

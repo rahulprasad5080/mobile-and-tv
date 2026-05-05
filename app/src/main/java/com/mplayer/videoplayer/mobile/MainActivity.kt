@@ -363,6 +363,16 @@ class MainActivity : ComponentActivity() {
                         tvPlayerViewModel.setPlaylist(tvBrowseViewModel.videos.value, video)
                         tvPlayerViewModel.playMedia(video, progress)
                         navController.navigate("tv_player")
+                    },
+                    onPlayAllClick = { videosList ->
+                        if (videosList.isNotEmpty()) {
+                            val firstVideo = videosList.first()
+                            val progress = progressRepository.getProgress(firstVideo.id)
+                            hasStartedTvPlayback = true
+                            tvPlayerViewModel.setPlaylist(videosList, firstVideo)
+                            tvPlayerViewModel.playMedia(firstVideo, progress)
+                            navController.navigate("tv_player")
+                        }
                     }
                 )
             }
