@@ -828,9 +828,9 @@ private fun TvSmallPopup(
     ) {
         Card(
             modifier = Modifier
-                .fillMaxHeight(0.26f)
-                .widthIn(min = 260.dp, max = 310.dp)
-                .padding(end = 40.dp),
+                .fillMaxHeight(0.85f)
+                .widthIn(min = 340.dp, max = 400.dp)
+                .padding(end = 48.dp),
             shape = RoundedCornerShape(12.dp),
             colors = CardDefaults.cardColors(containerColor = TvPanel),
             border = BorderStroke(1.dp, Color.White.copy(alpha = 0.12f))
@@ -904,9 +904,9 @@ private fun TvPlayerSettingsDialog(
     ) {
         Card(
             modifier = Modifier
-                .fillMaxHeight(0.24f)
-                .widthIn(min = 270.dp, max = 320.dp)
-                .padding(end = 40.dp),
+                .fillMaxHeight(0.85f)
+                .widthIn(min = 360.dp, max = 420.dp)
+                .padding(end = 48.dp),
             shape = RoundedCornerShape(12.dp),
             colors = CardDefaults.cardColors(containerColor = TvPanel),
             border = BorderStroke(1.dp, Color.White.copy(alpha = 0.12f))
