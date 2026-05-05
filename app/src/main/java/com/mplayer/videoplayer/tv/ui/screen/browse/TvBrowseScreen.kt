@@ -24,6 +24,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.itemsIndexed as gridItemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ArrowBack
@@ -31,6 +34,7 @@ import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.Folder
 import androidx.compose.material.icons.rounded.GridView
+import androidx.compose.material.icons.rounded.ViewList
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.Movie
 import androidx.compose.material.icons.rounded.PlayArrow
@@ -69,6 +73,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.layout.aspectRatio
 import coil.compose.rememberAsyncImagePainter
 import com.mplayer.videoplayer.core.model.VideoMediaItem
 import com.mplayer.videoplayer.tv.viewmodel.TvBrowseViewModel
@@ -92,6 +97,7 @@ fun TvBrowseScreen(
     var videoToRename by remember { mutableStateOf<VideoMediaItem?>(null) }
     var renameText by remember { mutableStateOf("") }
     var videoToDelete by remember { mutableStateOf<VideoMediaItem?>(null) }
+    var isGridView by remember { mutableStateOf(false) }
     val folders = remember(videos) { buildFolders(videos) }
     val firstItemFocusRequester = remember { FocusRequester() }
 
@@ -113,28 +119,51 @@ fun TvBrowseScreen(
                     ?.let { "${it.videos.size} videos" }
                     ?: "${folders.size} folders, ${videos.size} videos",
                 showBack = selectedFolder != null,
-                onBack = { selectedFolder = null }
+                isGridView = isGridView,
+                onBack = { selectedFolder = null },
+                onToggleView = { isGridView = !isGridView }
             )
 
             if (videos.isEmpty()) {
                 EmptyLibraryMessage()
             } else if (selectedFolder == null) {
-                FolderList(
-                    folders = folders,
-                    firstItemFocusRequester = firstItemFocusRequester,
-                    onFolderClick = { selectedFolder = it }
-                )
+                if (isGridView) {
+                    FolderGrid(
+                        folders = folders,
+                        firstItemFocusRequester = firstItemFocusRequester,
+                        onFolderClick = { selectedFolder = it }
+                    )
+                } else {
+                    FolderList(
+                        folders = folders,
+                        firstItemFocusRequester = firstItemFocusRequester,
+                        onFolderClick = { selectedFolder = it }
+                    )
+                }
             } else {
-                VideoList(
-                    videos = selectedFolder?.videos.orEmpty(),
-                    firstItemFocusRequester = firstItemFocusRequester,
-                    onVideoClick = onVideoClick,
-                    onRenameClick = { video ->
-                        videoToRename = video
-                        renameText = video.title
-                    },
-                    onDeleteClick = { videoToDelete = it }
-                )
+                if (isGridView) {
+                    VideoGrid(
+                        videos = selectedFolder?.videos.orEmpty(),
+                        firstItemFocusRequester = firstItemFocusRequester,
+                        onVideoClick = onVideoClick,
+                        onRenameClick = { video ->
+                            videoToRename = video
+                            renameText = video.title
+                        },
+                        onDeleteClick = { videoToDelete = it }
+                    )
+                } else {
+                    VideoList(
+                        videos = selectedFolder?.videos.orEmpty(),
+                        firstItemFocusRequester = firstItemFocusRequester,
+                        onVideoClick = onVideoClick,
+                        onRenameClick = { video ->
+                            videoToRename = video
+                            renameText = video.title
+                        },
+                        onDeleteClick = { videoToDelete = it }
+                    )
+                }
             }
         }
     }
@@ -198,7 +227,9 @@ private fun FileToolbar(
     title: String,
     subtitle: String,
     showBack: Boolean,
-    onBack: () -> Unit
+    isGridView: Boolean,
+    onBack: () -> Unit,
+    onToggleView: () -> Unit
 ) {
     Row(
         modifier = Modifier
@@ -240,8 +271,12 @@ private fun FileToolbar(
         IconButton(onClick = {}, modifier = Modifier.size(48.dp)) {
             Icon(Icons.Rounded.Search, contentDescription = "Search", tint = FileText)
         }
-        IconButton(onClick = {}, modifier = Modifier.size(48.dp)) {
-            Icon(Icons.Rounded.GridView, contentDescription = "View", tint = FileText)
+        IconButton(onClick = onToggleView, modifier = Modifier.size(48.dp)) {
+            Icon(
+                if (isGridView) Icons.Rounded.ViewList else Icons.Rounded.GridView, 
+                contentDescription = "Toggle View", 
+                tint = FileText
+            )
         }
         IconButton(onClick = {}, modifier = Modifier.size(48.dp)) {
             Icon(Icons.Rounded.MoreVert, contentDescription = "More", tint = FileText)
@@ -285,6 +320,56 @@ private fun VideoList(
     ) {
         itemsIndexed(videos, key = { _, video -> video.id }) { index, video ->
             VideoRow(
+                video = video,
+                focusRequester = firstItemFocusRequester.takeIf { index == 0 },
+                onClick = { onVideoClick(video) },
+                onRenameClick = { onRenameClick(video) },
+                onDeleteClick = { onDeleteClick(video) }
+            )
+        }
+    }
+}
+
+@Composable
+private fun FolderGrid(
+    folders: List<TvFolderModel>,
+    firstItemFocusRequester: FocusRequester,
+    onFolderClick: (TvFolderModel) -> Unit
+) {
+    LazyVerticalGrid(
+        columns = GridCells.Fixed(4),
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(horizontal = 34.dp, vertical = 18.dp),
+        horizontalArrangement = Arrangement.spacedBy(16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        gridItemsIndexed(folders, key = { _, folder -> folder.path ?: folder.name }) { index, folder ->
+            FolderGridItem(
+                folder = folder,
+                focusRequester = firstItemFocusRequester.takeIf { index == 0 },
+                onClick = { onFolderClick(folder) }
+            )
+        }
+    }
+}
+
+@Composable
+private fun VideoGrid(
+    videos: List<VideoMediaItem>,
+    firstItemFocusRequester: FocusRequester,
+    onVideoClick: (VideoMediaItem) -> Unit,
+    onRenameClick: (VideoMediaItem) -> Unit,
+    onDeleteClick: (VideoMediaItem) -> Unit
+) {
+    LazyVerticalGrid(
+        columns = GridCells.Fixed(3),
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(horizontal = 34.dp, vertical = 18.dp),
+        horizontalArrangement = Arrangement.spacedBy(16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        gridItemsIndexed(videos, key = { _, video -> video.id }) { index, video ->
+            VideoGridItem(
                 video = video,
                 focusRequester = firstItemFocusRequester.takeIf { index == 0 },
                 onClick = { onVideoClick(video) },
@@ -358,6 +443,63 @@ private fun VideoRow(
             }
             IconButton(onClick = onDeleteClick, modifier = Modifier.size(44.dp)) {
                 Icon(Icons.Rounded.Delete, contentDescription = "Delete", tint = Color(0xFFC62828))
+            }
+        }
+    )
+}
+
+@Composable
+private fun FolderGridItem(
+    folder: TvFolderModel,
+    focusRequester: FocusRequester?,
+    onClick: () -> Unit
+) {
+    FileGridCard(
+        focusRequester = focusRequester,
+        onClick = onClick,
+        imageContent = {
+            Box(
+                modifier = Modifier.fillMaxSize().background(Color(0xFFDDEBFF)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(Icons.Rounded.Folder, contentDescription = null, tint = FileAccent, modifier = Modifier.size(48.dp))
+            }
+        },
+        title = folder.name,
+        subtitle = "${folder.videos.size} videos"
+    )
+}
+
+@Composable
+private fun VideoGridItem(
+    video: VideoMediaItem,
+    focusRequester: FocusRequester?,
+    onClick: () -> Unit,
+    onRenameClick: () -> Unit,
+    onDeleteClick: () -> Unit
+) {
+    FileGridCard(
+        focusRequester = focusRequester,
+        onClick = onClick,
+        imageContent = {
+            Box(modifier = Modifier.fillMaxSize().background(Color(0xFFD6DAE4)), contentAlignment = Alignment.Center) {
+                Image(
+                    painter = rememberAsyncImagePainter(video.thumbnailUri ?: video.uri),
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
+                )
+                Icon(Icons.Rounded.Movie, contentDescription = null, tint = Color.White, modifier = Modifier.size(32.dp))
+            }
+        },
+        title = video.title,
+        subtitle = video.mimeType?.substringAfterLast('/')?.uppercase().orEmpty(),
+        actions = {
+            IconButton(onClick = onRenameClick, modifier = Modifier.size(36.dp)) {
+                Icon(Icons.Rounded.Edit, contentDescription = "Rename", tint = FileText, modifier = Modifier.size(18.dp))
+            }
+            IconButton(onClick = onDeleteClick, modifier = Modifier.size(36.dp)) {
+                Icon(Icons.Rounded.Delete, contentDescription = "Delete", tint = Color(0xFFC62828), modifier = Modifier.size(18.dp))
             }
         }
     )
@@ -449,6 +591,91 @@ private fun FileListRow(
                     verticalAlignment = Alignment.CenterVertically,
                     content = it
                 )
+            }
+        }
+    }
+}
+
+@Composable
+private fun FileGridCard(
+    focusRequester: FocusRequester?,
+    onClick: () -> Unit,
+    imageContent: @Composable () -> Unit,
+    title: String,
+    subtitle: String,
+    actions: (@Composable RowScope.() -> Unit)? = null
+) {
+    var isFocused by remember { mutableStateOf(false) }
+    val scale by animateFloatAsState(
+        targetValue = if (isFocused) 1.05f else 1f,
+        animationSpec = tween(100),
+        label = "file-card-scale"
+    )
+    val requesterModifier = focusRequester?.let { Modifier.focusRequester(it) } ?: Modifier
+
+    Surface(
+        color = if (isFocused) FileFocus else Color.White,
+        shape = RoundedCornerShape(8.dp),
+        border = if (isFocused) BorderStroke(3.dp, FileAccent) else BorderStroke(1.dp, FilePanelLine),
+        modifier = Modifier
+            .fillMaxWidth()
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            }
+            .then(requesterModifier)
+            .onFocusChanged { isFocused = it.isFocused }
+            .onKeyEvent { event ->
+                if (event.type == KeyEventType.KeyDown &&
+                    (event.key == Key.DirectionCenter || event.key == Key.Enter)
+                ) {
+                    onClick()
+                    true
+                } else {
+                    false
+                }
+            }
+            .focusable()
+            .clickable(onClick = onClick)
+    ) {
+        Column(modifier = Modifier.fillMaxWidth().padding(12.dp)) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(16f / 9f)
+                    .clip(RoundedCornerShape(6.dp)),
+                contentAlignment = Alignment.Center
+            ) {
+                imageContent()
+            }
+            Spacer(modifier = Modifier.height(12.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = title,
+                        style = MaterialTheme.typography.titleMedium,
+                        color = FileText,
+                        fontWeight = if (isFocused) FontWeight.Bold else FontWeight.SemiBold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    if (subtitle.isNotBlank()) {
+                        Text(
+                            text = subtitle,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = FileMuted,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+                actions?.let {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(2.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        content = it
+                    )
+                }
             }
         }
     }
