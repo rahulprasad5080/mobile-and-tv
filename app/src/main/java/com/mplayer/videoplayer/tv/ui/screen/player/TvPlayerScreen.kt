@@ -383,7 +383,10 @@ fun TvPlayerScreen(
                     showControls = true
                 },
                 onScreenSize = {
-                    viewModel.setResizeMode(nextResizeMode(resizeMode))
+                    val nextMode = nextResizeMode(resizeMode)
+                    viewModel.setResizeMode(nextMode)
+                    val modeName = resizeModeOptions.find { it.first == nextMode }?.second ?: "Default"
+                    android.widget.Toast.makeText(context, "Screen Size: $modeName", android.widget.Toast.LENGTH_SHORT).show()
                     showControls = true
                 }
             )
@@ -571,15 +574,12 @@ private fun TvRoundControlButton(
 ) {
     var isFocused by remember { mutableStateOf(false) }
     val iconSize = when {
-        emphasized -> 28.dp
-        size <= 42.dp -> 20.dp
-        size <= 52.dp -> 23.dp
-        size <= 68.dp -> 28.dp
+        emphasized -> 46.dp
         else -> 32.dp
     }
     val scale by animateFloatAsState(
-        targetValue = if (isFocused) 1.12f else 1f,
-        animationSpec = tween(120),
+        targetValue = if (isFocused) 1.25f else 1f,
+        animationSpec = tween(150),
         label = "tv-control-scale"
     )
     val requesterModifier = focusRequester?.let { Modifier.focusRequester(it) } ?: Modifier
@@ -594,19 +594,6 @@ private fun TvRoundControlButton(
                 scaleX = scale
                 scaleY = scale
             }
-            .shadow(
-                elevation = if (isFocused) 22.dp else 0.dp,
-                shape = CircleShape,
-                ambientColor = if (isFocused) TvAccent else Color.Transparent,
-                spotColor = if (isFocused) TvAccent else Color.Transparent
-            )
-            .clip(CircleShape)
-            .background(if (isFocused) TvAccent else Color.Transparent)
-            .border(
-                width = if (isFocused) 4.dp else 0.dp,
-                color = if (isFocused) Color.White else Color.Transparent,
-                shape = CircleShape
-            )
             .onFocusChanged { isFocused = it.isFocused }
             .onPreviewKeyEvent { event ->
                 if (event.type == KeyEventType.KeyDown &&
@@ -648,63 +635,74 @@ private fun TvProgressBar(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(start = 58.dp, end = 58.dp, bottom = 34.dp)
+            .padding(start = 58.dp, end = 58.dp, bottom = 48.dp)
     ) {
-        Slider(
-            value = if (duration > 0) {
-                (currentPosition.toFloat() / duration).coerceIn(0f, 1f)
-            } else {
-                0f
-            },
-            onValueChange = { progress ->
-                if (duration > 0) {
-                    onSeekTo((progress * duration).toLong())
-                }
-            },
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(34.dp),
-            colors = SliderDefaults.colors(
-                thumbColor = TvAccent,
-                activeTrackColor = TvAccent,
-                inactiveTrackColor = Color.White.copy(alpha = 0.24f)
-            )
-        )
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 6.dp),
-            horizontalArrangement = Arrangement.SpaceBetween
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(formatTime(currentPosition), color = Color.White, style = MaterialTheme.typography.titleMedium)
-            Text(formatTime(duration), color = Color.White, style = MaterialTheme.typography.titleMedium)
+            Text(
+                text = formatTime(currentPosition),
+                color = Color.White,
+                style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.padding(end = 16.dp)
+            )
+            
+            Slider(
+                value = if (duration > 0) {
+                    (currentPosition.toFloat() / duration).coerceIn(0f, 1f)
+                } else {
+                    0f
+                },
+                onValueChange = { progress ->
+                    if (duration > 0) {
+                        onSeekTo((progress * duration).toLong())
+                    }
+                },
+                modifier = Modifier
+                    .weight(1f)
+                    .focusProperties { canFocus = false },
+                colors = SliderDefaults.colors(
+                    thumbColor = TvAccent,
+                    activeTrackColor = Color.White.copy(alpha = 0.5f),
+                    inactiveTrackColor = Color.White.copy(alpha = 0.24f)
+                )
+            )
+            
+            Text(
+                text = formatTime(duration),
+                color = Color.White,
+                style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.padding(start = 16.dp)
+            )
         }
+        
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(top = 12.dp)
+                .padding(top = 16.dp)
         ) {
             Row(
                 modifier = Modifier.align(Alignment.Center),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                horizontalArrangement = Arrangement.spacedBy(36.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 TvRoundControlButton(
                     icon = Icons.Rounded.Replay10,
                     contentDescription = "Rewind 10 seconds",
-                    size = 42.dp,
+                    size = 52.dp,
                     onClick = onRewind
                 )
                 TvRoundControlButton(
                     icon = Icons.Rounded.SkipPrevious,
                     contentDescription = "Previous video",
-                    size = 40.dp,
+                    size = 52.dp,
                     onClick = onPrevious
                 )
                 TvRoundControlButton(
                     icon = if (isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
                     contentDescription = if (isPlaying) "Pause" else "Resume",
-                    size = 52.dp,
+                    size = 68.dp,
                     focusRequester = playFocusRequester,
                     emphasized = true,
                     onClick = onPlayPause
@@ -712,19 +710,20 @@ private fun TvProgressBar(
                 TvRoundControlButton(
                     icon = Icons.Rounded.SkipNext,
                     contentDescription = "Next video",
-                    size = 40.dp,
+                    size = 52.dp,
                     onClick = onNext
                 )
                 TvRoundControlButton(
                     icon = Icons.Rounded.Forward10,
                     contentDescription = "Forward 10 seconds",
-                    size = 42.dp,
+                    size = 52.dp,
                     onClick = onForward
                 )
+                Spacer(modifier = Modifier.width(16.dp))
                 TvRoundControlButton(
                     icon = Icons.Rounded.AspectRatio,
                     contentDescription = "Screen size",
-                    size = 40.dp,
+                    size = 52.dp,
                     onClick = onScreenSize
                 )
             }
