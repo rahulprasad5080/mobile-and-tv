@@ -303,7 +303,7 @@ private fun FileToolbar(
             val backRequesterModifier = if (topBarFocusRequester != null) Modifier.focusRequester(topBarFocusRequester) else Modifier
             TvBrowseIconButton(
                 onClick = onBack,
-                modifier = backRequesterModifier
+                modifier = backRequesterModifier.size(48.dp)
             ) {
                 Icon(Icons.Rounded.ArrowBack, contentDescription = "Back", tint = FileText)
             }
@@ -332,14 +332,14 @@ private fun FileToolbar(
 
         TvBrowseIconButton(
             onClick = onPlayAll,
-            modifier = playAllRequesterModifier
+            modifier = playAllRequesterModifier.size(48.dp)
         ) {
             Icon(Icons.Rounded.PlayArrow, contentDescription = "Play", tint = FileText)
         }
-        TvBrowseIconButton(onClick = onSearchClick) {
+        TvBrowseIconButton(onClick = onSearchClick, modifier = Modifier.size(48.dp)) {
             Icon(Icons.Rounded.Search, contentDescription = "Search", tint = FileText)
         }
-        TvBrowseIconButton(onClick = onToggleView) {
+        TvBrowseIconButton(onClick = onToggleView, modifier = Modifier.size(48.dp)) {
             Icon(
                 if (isGridView) Icons.Rounded.ViewList else Icons.Rounded.GridView, 
                 contentDescription = "Toggle View", 
@@ -347,7 +347,7 @@ private fun FileToolbar(
             )
         }
         Box {
-            TvBrowseIconButton(onClick = { showMoreMenu = true }) {
+            TvBrowseIconButton(onClick = { showMoreMenu = true }, modifier = Modifier.size(48.dp)) {
                 Icon(Icons.Rounded.MoreVert, contentDescription = "More", tint = FileText)
             }
             DropdownMenu(
@@ -380,7 +380,6 @@ private fun TvBrowseIconButton(
     IconButton(
         onClick = onClick,
         modifier = modifier
-            .size(48.dp)
             .clip(RoundedCornerShape(8.dp))
             .background(if (isFocused) FileFocus else Color.Transparent)
             .border(
@@ -389,7 +388,6 @@ private fun TvBrowseIconButton(
                 shape = RoundedCornerShape(8.dp)
             )
             .onFocusChanged { isFocused = it.isFocused }
-            .focusable()
     ) {
         content()
     }
@@ -549,10 +547,10 @@ private fun VideoRow(
         subtitle = "",
         trailing = video.mimeType?.substringAfterLast('/')?.uppercase().orEmpty(),
         actions = {
-            IconButton(onClick = onRenameClick, modifier = Modifier.size(44.dp)) {
+            TvBrowseIconButton(onClick = onRenameClick, modifier = Modifier.size(44.dp)) {
                 Icon(Icons.Rounded.Edit, contentDescription = "Rename", tint = FileText)
             }
-            IconButton(onClick = onDeleteClick, modifier = Modifier.size(44.dp)) {
+            TvBrowseIconButton(onClick = onDeleteClick, modifier = Modifier.size(44.dp)) {
                 Icon(Icons.Rounded.Delete, contentDescription = "Delete", tint = Color(0xFFC62828))
             }
         }
@@ -606,10 +604,10 @@ private fun VideoGridItem(
         title = video.title,
         subtitle = video.mimeType?.substringAfterLast('/')?.uppercase().orEmpty(),
         actions = {
-            IconButton(onClick = onRenameClick, modifier = Modifier.size(36.dp)) {
+            TvBrowseIconButton(onClick = onRenameClick, modifier = Modifier.size(36.dp)) {
                 Icon(Icons.Rounded.Edit, contentDescription = "Rename", tint = FileText, modifier = Modifier.size(18.dp))
             }
-            IconButton(onClick = onDeleteClick, modifier = Modifier.size(36.dp)) {
+            TvBrowseIconButton(onClick = onDeleteClick, modifier = Modifier.size(36.dp)) {
                 Icon(Icons.Rounded.Delete, contentDescription = "Delete", tint = Color(0xFFC62828), modifier = Modifier.size(18.dp))
             }
         }
@@ -647,16 +645,6 @@ private fun FileListRow(
             }
             .then(requesterModifier)
             .onFocusChanged { isFocused = it.isFocused }
-            .onKeyEvent { event ->
-                if (event.type == KeyEventType.KeyDown &&
-                    (event.key == Key.DirectionCenter || event.key == Key.Enter)
-                ) {
-                    onClick()
-                    true
-                } else {
-                    false
-                }
-            }
             .focusable()
             .clickable(onClick = onClick)
     ) {
@@ -736,16 +724,6 @@ private fun FileGridCard(
             }
             .then(requesterModifier)
             .onFocusChanged { isFocused = it.isFocused }
-            .onKeyEvent { event ->
-                if (event.type == KeyEventType.KeyDown &&
-                    (event.key == Key.DirectionCenter || event.key == Key.Enter)
-                ) {
-                    onClick()
-                    true
-                } else {
-                    false
-                }
-            }
             .focusable()
             .clickable(onClick = onClick)
     ) {

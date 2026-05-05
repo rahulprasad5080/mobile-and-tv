@@ -199,6 +199,9 @@ fun TvPlayerScreen(
     LaunchedEffect(showControls, isModalOpen) {
         if (!showControls && !isModalOpen) {
             runCatching { rootFocusRequester.requestFocus() }
+        } else if (showControls && !isModalOpen) {
+            delay(100)
+            runCatching { playFocusRequester.requestFocus() }
         }
     }
 
@@ -291,6 +294,8 @@ fun TvPlayerScreen(
                 PlayerView(it).apply {
                     this.player = player
                     useController = false
+                    isFocusable = false
+                    isFocusableInTouchMode = false
                     applyNetflixSubtitleStyle(subtitleSize, isTv = true)
                     layoutParams = FrameLayout.LayoutParams(
                         ViewGroup.LayoutParams.MATCH_PARENT,
@@ -594,19 +599,14 @@ private fun TvRoundControlButton(
                 scaleX = scale
                 scaleY = scale
             }
+            .clip(CircleShape)
+            .background(if (isFocused) Color.White.copy(alpha = 0.2f) else Color.Transparent)
+            .border(
+                width = if (isFocused) 2.dp else 0.dp,
+                color = if (isFocused) Color.White else Color.Transparent,
+                shape = CircleShape
+            )
             .onFocusChanged { isFocused = it.isFocused }
-            .onPreviewKeyEvent { event ->
-                if (event.type == KeyEventType.KeyDown &&
-                    (event.key == Key.DirectionCenter ||
-                        event.key == Key.Enter ||
-                        event.key == Key.NumPadEnter)
-                ) {
-                    onClick()
-                    true
-                } else {
-                    false
-                }
-            }
             .focusable()
     ) {
         Icon(
