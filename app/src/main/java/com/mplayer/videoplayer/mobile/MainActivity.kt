@@ -71,9 +71,9 @@ class MainActivity : ComponentActivity() {
     }
 
     private val requestPermissionLauncher = registerForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) { isGranted: Boolean ->
-        if (isGranted) {
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { results ->
+        if (videoPermissions().all { results[it] == true || ContextCompat.checkSelfPermission(this, it) == PackageManager.PERMISSION_GRANTED }) {
             if (isTelevisionDevice()) {
                 tvBrowseViewModel.startMediaStoreObserver()
                 tvBrowseViewModel.loadVideos()
@@ -143,7 +143,7 @@ class MainActivity : ComponentActivity() {
                 skipNextStartRefresh = true
             }
             else -> {
-                requestPermissionLauncher.launch(videoPermission())
+                requestPermissionLauncher.launch(videoPermissions())
             }
         }
     }
@@ -210,8 +210,18 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private fun videoPermissions(): Array<String> {
+        return if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.P) {
+            arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE, Manifest.permission.WRITE_EXTERNAL_STORAGE)
+        } else {
+            arrayOf(videoPermission())
+        }
+    }
+
     private fun hasVideoPermission(): Boolean {
-        return ContextCompat.checkSelfPermission(this, videoPermission()) == PackageManager.PERMISSION_GRANTED
+        return videoPermissions().all {
+            ContextCompat.checkSelfPermission(this, it) == PackageManager.PERMISSION_GRANTED
+        }
     }
 
     private fun supportsPictureInPicture(): Boolean {

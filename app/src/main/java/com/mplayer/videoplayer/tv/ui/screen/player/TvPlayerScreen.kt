@@ -102,9 +102,11 @@ import com.mplayer.videoplayer.core.model.AudioTrackInfo
 import com.mplayer.videoplayer.core.model.SubtitleTrackInfo
 import com.mplayer.videoplayer.tv.viewmodel.TvPlayerViewModel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.compose.runtime.rememberCoroutineScope
 
 private val TvOverlayBlack = Color.Black.copy(alpha = 0.62f)
 private val TvPanel = Color(0xFF111722)
@@ -136,6 +138,7 @@ fun TvPlayerScreen(
     var playerView by remember { mutableStateOf<PlayerView?>(null) }
     val rootFocusRequester = remember { FocusRequester() }
     val playFocusRequester = remember { FocusRequester() }
+    val focusScope = rememberCoroutineScope()
     val isModalOpen = showSettings || showAudioPopup || showSubtitlePopup
 
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -210,6 +213,14 @@ fun TvPlayerScreen(
         }
     }
 
+    fun restorePlayFocus() {
+        showControls = true
+        focusScope.launch {
+            delay(80)
+            runCatching { playFocusRequester.requestFocus() }
+        }
+    }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -239,12 +250,12 @@ fun TvPlayerScreen(
                     }
                     Key.MediaRewind -> {
                         viewModel.seekBy(-10_000)
-                        showControls = true
+                        restorePlayFocus()
                         true
                     }
                     Key.MediaFastForward -> {
                         viewModel.seekBy(10_000)
-                        showControls = true
+                        restorePlayFocus()
                         true
                     }
                     Key.MediaPrevious -> {
@@ -269,7 +280,7 @@ fun TvPlayerScreen(
                     Key.DirectionLeft -> {
                         if (!showControls || event.nativeKeyEvent.repeatCount > 0) {
                             viewModel.seekBy(-10_000)
-                            showControls = true
+                            restorePlayFocus()
                             true
                         } else {
                             false
@@ -278,7 +289,7 @@ fun TvPlayerScreen(
                     Key.DirectionRight -> {
                         if (!showControls || event.nativeKeyEvent.repeatCount > 0) {
                             viewModel.seekBy(10_000)
-                            showControls = true
+                            restorePlayFocus()
                             true
                         } else {
                             false
@@ -374,34 +385,34 @@ fun TvPlayerScreen(
                 playFocusRequester = playFocusRequester,
                 onSeekTo = {
                     viewModel.seekTo(it)
-                    showControls = true
+                    restorePlayFocus()
                 },
                 onPrevious = {
                     viewModel.playPrevious()
-                    showControls = true
+                    restorePlayFocus()
                 },
                 onRewind = {
                     viewModel.seekBy(-10_000)
-                    showControls = true
+                    restorePlayFocus()
                 },
                 onPlayPause = {
                     viewModel.togglePlayPause()
-                    showControls = true
+                    restorePlayFocus()
                 },
                 onForward = {
                     viewModel.seekBy(10_000)
-                    showControls = true
+                    restorePlayFocus()
                 },
                 onNext = {
                     viewModel.playNext()
-                    showControls = true
+                    restorePlayFocus()
                 },
                 onScreenSize = {
                     val nextMode = nextResizeMode(resizeMode)
                     viewModel.setResizeMode(nextMode)
                     val modeName = resizeModeOptions.find { it.first == nextMode }?.second ?: "Default"
                     android.widget.Toast.makeText(context, "Screen Size: $modeName", android.widget.Toast.LENGTH_SHORT).show()
-                    showControls = true
+                    restorePlayFocus()
                 }
             )
         }
@@ -411,11 +422,14 @@ fun TvPlayerScreen(
     if (showAudioPopup) {
         TvAudioTracksPopup(
             audioTracks = audioTracks,
-            onDismiss = { showAudioPopup = false },
+            onDismiss = {
+                showAudioPopup = false
+                restorePlayFocus()
+            },
             onAudioSelect = {
                 viewModel.selectAudioTrack(it)
                 showAudioPopup = false
-                showControls = true
+                restorePlayFocus()
             }
         )
     }
@@ -423,18 +437,24 @@ fun TvPlayerScreen(
     if (showSubtitlePopup) {
         TvSubtitleTracksPopup(
             subtitleTracks = subtitleTracks,
-            onDismiss = { showSubtitlePopup = false },
+            onDismiss = {
+                showSubtitlePopup = false
+                restorePlayFocus()
+            },
             onSubtitleSelect = {
                 viewModel.selectSubtitleTrack(it)
                 showSubtitlePopup = false
-                showControls = true
+                restorePlayFocus()
             }
         )
     }
 
     if (showSettings) {
         TvPlayerSettingsDialog(
-            onDismiss = { showSettings = false },
+            onDismiss = {
+                showSettings = false
+                restorePlayFocus()
+            },
             playbackSpeed = playbackSpeed,
             screenBrightness = screenBrightness,
             onBrightnessDown = {
@@ -617,10 +637,16 @@ private fun TvRoundControlButton(
                 scaleY = scale
             }
             .clip(CircleShape)
-            .background(if (isFocused) Color.White.copy(alpha = 0.2f) else Color.Transparent)
+            .background(
+                when {
+                    isFocused -> TvAccent
+                    emphasized -> Color.White.copy(alpha = 0.16f)
+                    else -> Color.White.copy(alpha = 0.08f)
+                }
+            )
             .border(
-                width = if (isFocused) 2.dp else 0.dp,
-                color = if (isFocused) Color.White else Color.Transparent,
+                width = if (isFocused) 3.dp else 1.dp,
+                color = if (isFocused) Color.White else Color.White.copy(alpha = 0.16f),
                 shape = CircleShape
             )
             .onFocusChanged { isFocused = it.isFocused }

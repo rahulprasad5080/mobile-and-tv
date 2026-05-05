@@ -116,7 +116,9 @@ class TvPlayerViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun togglePlayPause() {
-        if (_isPlaying.value) {
+        val player = playerManager.getPlayer()
+        val shouldPause = player?.isPlaying ?: player?.playWhenReady ?: _isPlaying.value
+        if (shouldPause) {
             _isPlaying.value = false
             playerManager.pause()
         } else {
@@ -127,16 +129,22 @@ class TvPlayerViewModel(application: Application) : AndroidViewModel(application
 
     fun seekBy(deltaMs: Long) {
         val player = playerManager.getPlayer() ?: return
-        val duration = player.duration.coerceAtLeast(0)
-        val nextPosition = (player.currentPosition + deltaMs).coerceIn(0, duration)
+        val duration = player.duration.takeIf { it > 0 }
+        val nextPosition = if (duration != null) {
+            (player.currentPosition + deltaMs).coerceIn(0, duration)
+        } else {
+            (player.currentPosition + deltaMs).coerceAtLeast(0)
+        }
         playerManager.seekTo(nextPosition)
         _currentPosition.value = nextPosition
+        _isPlaying.value = player.playWhenReady
     }
 
     fun seekTo(position: Long) {
         val safePosition = position.coerceAtLeast(0)
         playerManager.seekTo(safePosition)
         _currentPosition.value = safePosition
+        playerManager.getPlayer()?.let { _isPlaying.value = it.playWhenReady }
     }
 
     fun playNext() {

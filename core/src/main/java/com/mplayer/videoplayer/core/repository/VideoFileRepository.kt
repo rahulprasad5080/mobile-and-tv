@@ -77,8 +77,24 @@ class VideoFileRepository {
                 put(MediaStore.Video.Media.DISPLAY_NAME, finalName)
             }
             try {
-                context.contentResolver.update(uri, contentValues, null, null)
-                val newPath = getPathFromUri(context, uri)
+                val updatedRows = if (uri.scheme == "content") {
+                    context.contentResolver.update(uri, contentValues, null, null)
+                } else {
+                    0
+                }
+                val renamedFile = if (updatedRows <= 0) {
+                    renameFilePath(oldPath, finalName)
+                } else {
+                    true
+                }
+
+                if (!renamedFile) {
+                    throw IllegalStateException("Unable to rename video in storage")
+                }
+
+                val newPath = getPathFromUri(context, uri) ?: oldPath?.let { path ->
+                    File(path).parentFile?.let { parent -> File(parent, finalName).absolutePath }
+                }
                 val pathsToScan = mutableListOf<String>()
                 oldPath?.let { pathsToScan.add(it) }
                 newPath?.let { pathsToScan.add(it) }
@@ -94,6 +110,16 @@ class VideoFileRepository {
                 }
             }
         }
+    }
+
+    private fun renameFilePath(oldPath: String?, finalName: String): Boolean {
+        val source = oldPath?.let { File(it) } ?: return false
+        val parent = source.parentFile ?: return false
+        if (!source.exists()) return false
+        if (source.name == finalName) return true
+
+        val target = uniqueTargetFile(parent, finalName)
+        return source.renameTo(target)
     }
 
     suspend fun copyVideoToFolder(context: Context, sourceUri: Uri, targetFolder: File): Boolean {
