@@ -98,8 +98,10 @@ import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import com.mplayer.videoplayer.common.ui.player.SubtitleSize
 import com.mplayer.videoplayer.common.ui.player.applyNetflixSubtitleStyle
+import com.mplayer.videoplayer.common.ui.player.createCompatiblePlayerView
 import com.mplayer.videoplayer.core.model.AudioTrackInfo
 import com.mplayer.videoplayer.core.model.SubtitleTrackInfo
+import com.mplayer.videoplayer.core.player.PlayerManager
 import com.mplayer.videoplayer.tv.viewmodel.TvPlayerViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -128,6 +130,8 @@ fun TvPlayerScreen(
     val resizeMode by viewModel.resizeMode.collectAsState()
     val audioTracks by viewModel.audioTracks.collectAsState()
     val subtitleTracks by viewModel.subtitleTracks.collectAsState()
+    val playbackState by viewModel.playerManager.playbackState.collectAsState()
+    val playbackErrorMessage = (playbackState as? PlayerManager.PlaybackState.Error)?.message
     val context = LocalContext.current
     var showControls by remember { mutableStateOf(true) }
     var showSettings by remember { mutableStateOf(false) }
@@ -307,7 +311,7 @@ fun TvPlayerScreen(
     ) {
         AndroidView(
             factory = {
-                PlayerView(it).apply {
+                createCompatiblePlayerView(it).apply {
                     this.player = player
                     useController = false
                     isFocusable = false
@@ -330,6 +334,36 @@ fun TvPlayerScreen(
             },
             modifier = Modifier.fillMaxSize()
         )
+
+        if (playbackErrorMessage != null) {
+            Surface(
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .fillMaxWidth(0.64f)
+                    .padding(24.dp),
+                color = TvPanel,
+                shape = RoundedCornerShape(8.dp),
+                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.18f))
+            ) {
+                Column(
+                    modifier = Modifier.padding(horizontal = 22.dp, vertical = 18.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        text = "Video format not supported",
+                        style = MaterialTheme.typography.titleLarge,
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = playbackErrorMessage,
+                        style = MaterialTheme.typography.titleMedium,
+                        color = TvMuted
+                    )
+                }
+            }
+        }
 
         AnimatedVisibility(
             visible = showControls,

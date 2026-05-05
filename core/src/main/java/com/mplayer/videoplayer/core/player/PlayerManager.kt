@@ -1,6 +1,7 @@
 package com.mplayer.videoplayer.core.player
 
 import android.content.Context
+import android.os.Build
 import kotlin.OptIn
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
@@ -13,6 +14,7 @@ import androidx.media3.common.TrackSelectionOverride
 import androidx.media3.common.Tracks
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.DefaultLoadControl
+import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 import com.mplayer.videoplayer.core.model.AudioTrackInfo
@@ -30,6 +32,7 @@ class PlayerManager(private val context: Context) {
         @UnstableApi
         private var instance: ExoPlayer? = null
         private var currentMediaId: String? = null
+        private var currentMediaMimeType: String? = null
     }
 
     private val trackSelector = DefaultTrackSelector(context)
@@ -51,6 +54,13 @@ class PlayerManager(private val context: Context) {
     fun initializePlayer() {
         if (instance != null) return
 
+        trackSelector.parameters = trackSelector.buildUponParameters()
+            .setExceedVideoConstraintsIfNecessary(true)
+            .setExceedAudioConstraintsIfNecessary(true)
+            .setExceedRendererCapabilitiesIfNecessary(true)
+            .setTunnelingEnabled(false)
+            .build()
+
         val loadControl = DefaultLoadControl.Builder()
             .setBufferDurationsMs(
                 2_500,
@@ -61,7 +71,12 @@ class PlayerManager(private val context: Context) {
             .setPrioritizeTimeOverSizeThresholds(true)
             .build()
 
+        val renderersFactory = DefaultRenderersFactory(context)
+            .setEnableDecoderFallback(true)
+            .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON)
+
         instance = ExoPlayer.Builder(context)
+            .setRenderersFactory(renderersFactory)
             .setTrackSelector(trackSelector)
             .setLoadControl(loadControl)
             .setAudioAttributes(
@@ -84,7 +99,7 @@ class PlayerManager(private val context: Context) {
                     }
 
                     override fun onPlayerError(error: PlaybackException) {
-                        _playbackState.value = PlaybackState.Error(error.message ?: "Unknown Error")
+                        _playbackState.value = PlaybackState.Error(buildPlaybackErrorMessage(error))
                     }
 
                     override fun onTracksChanged(tracks: Tracks) {
@@ -130,6 +145,7 @@ class PlayerManager(private val context: Context) {
             .build()
 
         currentMediaId = item.id
+        currentMediaMimeType = item.mimeType
         player.setMediaItem(mediaItem, startPosition)
         player.prepare()
         player.play()
@@ -162,6 +178,7 @@ class PlayerManager(private val context: Context) {
             .build()
 
         currentMediaId = item.id
+        currentMediaMimeType = item.mimeType
         player.setMediaItem(mediaItem, startPositionMs.coerceAtLeast(0))
         player.playWhenReady = false
         player.prepare()
@@ -188,6 +205,7 @@ class PlayerManager(private val context: Context) {
         instance?.release()
         instance = null
         currentMediaId = null
+        currentMediaMimeType = null
     }
 
     // Track Selection Logic
@@ -298,6 +316,37 @@ class PlayerManager(private val context: Context) {
                 it.startsWith("application/x-mpegURL", ignoreCase = true) ||
                 it.startsWith("application/dash+xml", ignoreCase = true)
         }
+    }
+
+    private fun buildPlaybackErrorMessage(error: PlaybackException): String {
+        val mimeType = currentMediaMimeType.orEmpty()
+        val baseMessage = error.message?.takeIf { it.isNotBlank() } ?: "Playback failed"
+
+        return when {
+            isEmulator() && mimeType.contains("matroska", ignoreCase = true) ->
+                "This Android TV emulator cannot decode this MKV/Matroska video. Try an MP4 file encoded with H.264 video and AAC audio."
+            isEmulator() ->
+                "This Android TV emulator may not support this video's codec or container. MP4 with H.264 video and AAC audio is the safest test format."
+            else -> baseMessage
+        }
+    }
+
+    private fun isEmulator(): Boolean {
+        val fingerprint = Build.FINGERPRINT.lowercase(Locale.US)
+        val model = Build.MODEL.lowercase(Locale.US)
+        val manufacturer = Build.MANUFACTURER.lowercase(Locale.US)
+        val brand = Build.BRAND.lowercase(Locale.US)
+        val device = Build.DEVICE.lowercase(Locale.US)
+        val product = Build.PRODUCT.lowercase(Locale.US)
+
+        return fingerprint.startsWith("generic") ||
+            fingerprint.startsWith("unknown") ||
+            model.contains("emulator") ||
+            model.contains("android sdk built for") ||
+            manufacturer.contains("genymotion") ||
+            brand.startsWith("generic") && device.startsWith("generic") ||
+            product.contains("sdk") ||
+            product.contains("emulator")
     }
 
     private fun buildSubtitleTrackLabel(label: String?, language: String?): String {

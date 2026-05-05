@@ -44,6 +44,8 @@ import com.mplayer.videoplayer.core.model.AudioTrackInfo
 import com.mplayer.videoplayer.core.model.SubtitleTrackInfo
 import com.mplayer.videoplayer.common.ui.player.SubtitleSize
 import com.mplayer.videoplayer.common.ui.player.applyNetflixSubtitleStyle
+import com.mplayer.videoplayer.common.ui.player.createCompatiblePlayerView
+import com.mplayer.videoplayer.core.player.PlayerManager
 import com.mplayer.videoplayer.mobile.viewmodel.MobilePlayerViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -84,6 +86,8 @@ fun VideoPlayerScreen(
     val isInPipMode by viewModel.isInPipMode.collectAsState()
     val audioTracks by viewModel.audioTracks.collectAsState()
     val subtitleTracks by viewModel.subtitleTracks.collectAsState()
+    val playbackState by viewModel.playerManager.playbackState.collectAsState()
+    val playbackErrorMessage = (playbackState as? PlayerManager.PlaybackState.Error)?.message
     
     var showSettings by remember { mutableStateOf(false) }
     var showAudioDialog by remember { mutableStateOf(false) }
@@ -277,7 +281,7 @@ fun VideoPlayerScreen(
     ) {
         AndroidView(
             factory = { ctx ->
-                PlayerView(ctx).apply {
+                createCompatiblePlayerView(ctx).apply {
                     this.player = player
                     keepScreenOn = true
                     useController = false
@@ -295,6 +299,36 @@ fun VideoPlayerScreen(
                 view.applyNetflixSubtitleStyle(subtitleSize, isTv = false)
             },
         )
+
+        if (playbackErrorMessage != null) {
+            Surface(
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .fillMaxWidth(0.88f)
+                    .padding(16.dp),
+                color = DeepBlack,
+                shape = RoundedCornerShape(8.dp),
+                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.14f))
+            ) {
+                Column(
+                    modifier = Modifier.padding(horizontal = 18.dp, vertical = 16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        text = "Video format not supported",
+                        color = Color.White,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = playbackErrorMessage,
+                        color = Color.White.copy(alpha = 0.72f),
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                }
+            }
+        }
         
         if (!isInPipMode) {
             // Gesture Feedback UI
