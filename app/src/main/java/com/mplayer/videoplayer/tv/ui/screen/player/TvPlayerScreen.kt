@@ -235,39 +235,47 @@ fun TvPlayerScreen(
             .onPreviewKeyEvent { event ->
                 if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
                 if (isModalOpen) return@onPreviewKeyEvent false
+                val isRepeatedKey = event.nativeKeyEvent.repeatCount > 0
                 when (event.key) {
                     Key.MediaPlayPause,
                     Key.Spacebar -> {
+                        if (isRepeatedKey) return@onPreviewKeyEvent true
                         viewModel.togglePlayPause()
                         showControls = true
                         true
                     }
                     Key.MediaPlay -> {
+                        if (isRepeatedKey) return@onPreviewKeyEvent true
                         if (!isPlaying) viewModel.togglePlayPause()
                         showControls = true
                         true
                     }
                     Key.MediaPause -> {
+                        if (isRepeatedKey) return@onPreviewKeyEvent true
                         if (isPlaying) viewModel.togglePlayPause()
                         showControls = true
                         true
                     }
                     Key.MediaRewind -> {
+                        if (isRepeatedKey) return@onPreviewKeyEvent true
                         viewModel.seekBy(-10_000)
                         restorePlayFocus()
                         true
                     }
                     Key.MediaFastForward -> {
+                        if (isRepeatedKey) return@onPreviewKeyEvent true
                         viewModel.seekBy(10_000)
                         restorePlayFocus()
                         true
                     }
                     Key.MediaPrevious -> {
+                        if (isRepeatedKey) return@onPreviewKeyEvent true
                         viewModel.playPrevious()
                         showControls = true
                         true
                     }
                     Key.MediaNext -> {
+                        if (isRepeatedKey) return@onPreviewKeyEvent true
                         viewModel.playNext()
                         showControls = true
                         true
@@ -282,7 +290,8 @@ fun TvPlayerScreen(
                         }
                     }
                     Key.DirectionLeft -> {
-                        if (!showControls || event.nativeKeyEvent.repeatCount > 0) {
+                        if (isRepeatedKey) return@onPreviewKeyEvent !showControls
+                        if (!showControls) {
                             viewModel.seekBy(-10_000)
                             restorePlayFocus()
                             true
@@ -291,7 +300,8 @@ fun TvPlayerScreen(
                         }
                     }
                     Key.DirectionRight -> {
-                        if (!showControls || event.nativeKeyEvent.repeatCount > 0) {
+                        if (isRepeatedKey) return@onPreviewKeyEvent !showControls
+                        if (!showControls) {
                             viewModel.seekBy(10_000)
                             restorePlayFocus()
                             true
@@ -576,8 +586,10 @@ private fun TvIconOnlyButton(
             )
             .onFocusChanged { isFocused = it.isFocused }
             .onPreviewKeyEvent { event ->
-                if (event.type == KeyEventType.KeyDown && event.key.isTvSelectKey()) {
-                    onClick()
+                if (event.isTvSelectDown()) {
+                    if (event.isInitialTvSelectDown()) {
+                        onClick()
+                    }
                     true
                 } else {
                     false
@@ -685,8 +697,10 @@ private fun TvRoundControlButton(
             )
             .onFocusChanged { isFocused = it.isFocused }
             .onPreviewKeyEvent { event ->
-                if (event.type == KeyEventType.KeyDown && event.key.isTvSelectKey()) {
-                    onClick()
+                if (event.isTvSelectDown()) {
+                    if (event.isInitialTvSelectDown()) {
+                        onClick()
+                    }
                     true
                 } else {
                     false
@@ -1156,8 +1170,10 @@ private fun TvSettingsChip(
             .then(requesterModifier)
             .onFocusChanged { isFocused = it.isFocused }
             .onPreviewKeyEvent { event ->
-                if (event.type == KeyEventType.KeyDown && event.key.isTvSelectKey()) {
-                    onClick()
+                if (event.isTvSelectDown()) {
+                    if (event.isInitialTvSelectDown()) {
+                        onClick()
+                    }
                     true
                 } else {
                     false
@@ -1203,8 +1219,10 @@ private fun TvTrackOption(
             }
             .onFocusChanged { isFocused = it.isFocused }
             .onPreviewKeyEvent { event ->
-                if (event.type == KeyEventType.KeyDown && event.key.isTvSelectKey()) {
-                    onClick()
+                if (event.isTvSelectDown()) {
+                    if (event.isInitialTvSelectDown()) {
+                        onClick()
+                    }
                     true
                 } else {
                     false
@@ -1272,4 +1290,12 @@ private fun Key.isTvSelectKey(): Boolean {
     return this == Key.DirectionCenter ||
         this == Key.Enter ||
         this == Key.NumPadEnter
+}
+
+private fun androidx.compose.ui.input.key.KeyEvent.isTvSelectDown(): Boolean {
+    return type == KeyEventType.KeyDown && key.isTvSelectKey()
+}
+
+private fun androidx.compose.ui.input.key.KeyEvent.isInitialTvSelectDown(): Boolean {
+    return isTvSelectDown() && nativeKeyEvent.repeatCount == 0
 }

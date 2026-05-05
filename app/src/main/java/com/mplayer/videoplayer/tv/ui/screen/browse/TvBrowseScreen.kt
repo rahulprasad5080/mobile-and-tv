@@ -399,8 +399,10 @@ private fun TvBrowseIconButton(
             .onPreviewKeyEvent { event ->
                 when {
                     event.type != KeyEventType.KeyDown -> false
-                    event.key.isTvSelectKey() -> {
-                        onClick()
+                    event.isTvSelectDown() -> {
+                        if (event.isInitialTvSelectDown()) {
+                            onClick()
+                        }
                         true
                     }
                     event.key == Key.DirectionLeft -> focusManager.moveFocus(FocusDirection.Left)
@@ -696,8 +698,10 @@ private fun FileListRow(
                 }
             }
             .onPreviewKeyEvent { event ->
-                if (event.type == KeyEventType.KeyDown && event.key.isTvSelectKey()) {
-                    onClick()
+                if (event.isTvSelectDown()) {
+                    if (event.isInitialTvSelectDown()) {
+                        onClick()
+                    }
                     true
                 } else {
                     false
@@ -795,8 +799,10 @@ private fun FileGridCard(
                 }
             }
             .onPreviewKeyEvent { event ->
-                if (event.type == KeyEventType.KeyDown && event.key.isTvSelectKey()) {
-                    onClick()
+                if (event.isTvSelectDown()) {
+                    if (event.isInitialTvSelectDown()) {
+                        onClick()
+                    }
                     true
                 } else {
                     false
@@ -887,4 +893,12 @@ private fun Key.isTvSelectKey(): Boolean {
     return this == Key.DirectionCenter ||
         this == Key.Enter ||
         this == Key.NumPadEnter
+}
+
+private fun androidx.compose.ui.input.key.KeyEvent.isTvSelectDown(): Boolean {
+    return type == KeyEventType.KeyDown && key.isTvSelectKey()
+}
+
+private fun androidx.compose.ui.input.key.KeyEvent.isInitialTvSelectDown(): Boolean {
+    return isTvSelectDown() && nativeKeyEvent.repeatCount == 0
 }
