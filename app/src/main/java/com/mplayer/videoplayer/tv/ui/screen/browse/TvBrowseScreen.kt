@@ -130,6 +130,7 @@ fun TvBrowseScreen(
                     ?: "${folders.size} folders, ${filteredVideos.size} videos",
                 showBack = selectedFolder != null,
                 isGridView = isGridView,
+                topBarFocusRequester = if ((selectedFolder != null && selectedFolder?.videos?.isEmpty() == true) || (selectedFolder == null && filteredVideos.isEmpty())) firstItemFocusRequester else null,
                 onBack = { selectedFolder = null },
                 onToggleView = { isGridView = !isGridView },
                 onRefresh = { viewModel.loadVideos() },
@@ -284,7 +285,8 @@ private fun FileToolbar(
     onToggleView: () -> Unit,
     onRefresh: () -> Unit,
     onPlayAll: () -> Unit,
-    onSearchClick: () -> Unit
+    onSearchClick: () -> Unit,
+    topBarFocusRequester: FocusRequester? = null
 ) {
     var showMoreMenu by remember { mutableStateOf(false) }
 
@@ -298,7 +300,11 @@ private fun FileToolbar(
         verticalAlignment = Alignment.CenterVertically
     ) {
         if (showBack) {
-            IconButton(onClick = onBack, modifier = Modifier.size(48.dp)) {
+            val backRequesterModifier = if (topBarFocusRequester != null) Modifier.focusRequester(topBarFocusRequester) else Modifier
+            TvBrowseIconButton(
+                onClick = onBack,
+                modifier = backRequesterModifier
+            ) {
                 Icon(Icons.Rounded.ArrowBack, contentDescription = "Back", tint = FileText)
             }
             Spacer(modifier = Modifier.width(8.dp))
@@ -322,13 +328,18 @@ private fun FileToolbar(
             )
         }
 
-        IconButton(onClick = onPlayAll, modifier = Modifier.size(48.dp)) {
+        val playAllRequesterModifier = if (!showBack && topBarFocusRequester != null) Modifier.focusRequester(topBarFocusRequester) else Modifier
+
+        TvBrowseIconButton(
+            onClick = onPlayAll,
+            modifier = playAllRequesterModifier
+        ) {
             Icon(Icons.Rounded.PlayArrow, contentDescription = "Play", tint = FileText)
         }
-        IconButton(onClick = onSearchClick, modifier = Modifier.size(48.dp)) {
+        TvBrowseIconButton(onClick = onSearchClick) {
             Icon(Icons.Rounded.Search, contentDescription = "Search", tint = FileText)
         }
-        IconButton(onClick = onToggleView, modifier = Modifier.size(48.dp)) {
+        TvBrowseIconButton(onClick = onToggleView) {
             Icon(
                 if (isGridView) Icons.Rounded.ViewList else Icons.Rounded.GridView, 
                 contentDescription = "Toggle View", 
@@ -336,7 +347,7 @@ private fun FileToolbar(
             )
         }
         Box {
-            IconButton(onClick = { showMoreMenu = true }, modifier = Modifier.size(48.dp)) {
+            TvBrowseIconButton(onClick = { showMoreMenu = true }) {
                 Icon(Icons.Rounded.MoreVert, contentDescription = "More", tint = FileText)
             }
             DropdownMenu(
@@ -356,6 +367,31 @@ private fun FileToolbar(
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun TvBrowseIconButton(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit
+) {
+    var isFocused by remember { mutableStateOf(false) }
+    IconButton(
+        onClick = onClick,
+        modifier = modifier
+            .size(48.dp)
+            .clip(RoundedCornerShape(8.dp))
+            .background(if (isFocused) FileFocus else Color.Transparent)
+            .border(
+                width = if (isFocused) 2.dp else 0.dp,
+                color = if (isFocused) FileAccent else Color.Transparent,
+                shape = RoundedCornerShape(8.dp)
+            )
+            .onFocusChanged { isFocused = it.isFocused }
+            .focusable()
+    ) {
+        content()
     }
 }
 

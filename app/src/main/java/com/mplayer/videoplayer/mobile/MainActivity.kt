@@ -480,4 +480,14 @@ class MainActivity : ComponentActivity() {
             hasStartedMobilePlayback = false
         }
     }
+
+    override fun dispatchKeyEvent(event: android.view.KeyEvent): Boolean {
+        if (isTelevisionDevice() && event.action == android.view.KeyEvent.ACTION_DOWN) {
+            val currentFocus = window.currentFocus
+            if (currentFocus == null) {
+                window.decorView.requestFocus()
+            }
+        }
+        return super.dispatchKeyEvent(event)
+    }
 }
