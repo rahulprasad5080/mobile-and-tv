@@ -47,6 +47,8 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -121,7 +123,8 @@ fun TvBrowseScreen(
                 showBack = selectedFolder != null,
                 isGridView = isGridView,
                 onBack = { selectedFolder = null },
-                onToggleView = { isGridView = !isGridView }
+                onToggleView = { isGridView = !isGridView },
+                onRefresh = { viewModel.loadVideos() }
             )
 
             if (videos.isEmpty()) {
@@ -229,8 +232,11 @@ private fun FileToolbar(
     showBack: Boolean,
     isGridView: Boolean,
     onBack: () -> Unit,
-    onToggleView: () -> Unit
+    onToggleView: () -> Unit,
+    onRefresh: () -> Unit
 ) {
+    var showMoreMenu by remember { mutableStateOf(false) }
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -278,8 +284,26 @@ private fun FileToolbar(
                 tint = FileText
             )
         }
-        IconButton(onClick = {}, modifier = Modifier.size(48.dp)) {
-            Icon(Icons.Rounded.MoreVert, contentDescription = "More", tint = FileText)
+        Box {
+            IconButton(onClick = { showMoreMenu = true }, modifier = Modifier.size(48.dp)) {
+                Icon(Icons.Rounded.MoreVert, contentDescription = "More", tint = FileText)
+            }
+            DropdownMenu(
+                expanded = showMoreMenu,
+                onDismissRequest = { showMoreMenu = false }
+            ) {
+                DropdownMenuItem(
+                    text = { Text("Sort By") },
+                    onClick = { showMoreMenu = false }
+                )
+                DropdownMenuItem(
+                    text = { Text("Refresh") },
+                    onClick = {
+                        showMoreMenu = false
+                        onRefresh()
+                    }
+                )
+            }
         }
     }
 }
