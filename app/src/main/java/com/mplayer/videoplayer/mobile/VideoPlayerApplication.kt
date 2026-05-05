@@ -15,6 +15,3 @@ class VideoPlayerApplication : Application(), ImageLoaderFactory {
             .build()
     }
 }
-
-
-bew
