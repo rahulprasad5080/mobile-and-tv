@@ -172,7 +172,8 @@ fun TvBrowseScreen(
                         onVideoClick = onVideoClick,
                         onRenameClick = { video ->
                             videoToRename = video
-                            renameText = video.cleanTvTitle()
+                            // Use raw title (with extension) so VideoFileRepository can detect it
+                            renameText = video.title
                         },
                         onDeleteClick = { videoToDelete = it }
                     )
@@ -183,7 +184,8 @@ fun TvBrowseScreen(
                         onVideoClick = onVideoClick,
                         onRenameClick = { video ->
                             videoToRename = video
-                            renameText = video.cleanTvTitle()
+                            // Use raw title (with extension) so VideoFileRepository can detect it
+                            renameText = video.title
                         },
                         onDeleteClick = { videoToDelete = it }
                     )
@@ -207,7 +209,9 @@ fun TvBrowseScreen(
             confirmButton = {
                 TextButton(
                     onClick = {
-                        viewModel.renameVideo(video, renameText)
+                        // Strip extension from the display name before passing — repository adds it back
+                        val nameWithoutExt = renameText.substringBeforeLast('.').ifBlank { renameText }
+                        viewModel.renameVideo(video, nameWithoutExt)
                         videoToRename = null
                     }
                 ) {
@@ -585,7 +589,8 @@ private fun VideoRow(
         },
         title = video.cleanTvTitle(),
         subtitle = "",
-        trailing = "",
+        // Bug 7 fix: show duration in H:MM:SS format
+        trailing = if (video.duration > 0) formatVideoDuration(video.duration) else "",
         actions = {
             TvBrowseIconButton(onClick = onRenameClick, modifier = Modifier.size(44.dp)) {
                 Icon(Icons.Rounded.Edit, contentDescription = "Rename", tint = FileText)
@@ -642,7 +647,8 @@ private fun VideoGridItem(
             }
         },
         title = video.cleanTvTitle(),
-        subtitle = "",
+        // Bug 7 fix: show duration in H:MM:SS format
+        subtitle = if (video.duration > 0) formatVideoDuration(video.duration) else "",
         actions = {
             TvBrowseIconButton(onClick = onRenameClick, modifier = Modifier.size(36.dp)) {
                 Icon(Icons.Rounded.Edit, contentDescription = "Rename", tint = FileText, modifier = Modifier.size(18.dp))
@@ -887,6 +893,23 @@ private fun buildFolders(videos: List<VideoMediaItem>): List<TvFolderModel> {
             )
         }
         .sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.name })
+}
+
+/**
+ * Bug 7 fix: Format duration from milliseconds to H:MM:SS or MM:SS.
+ * Shows hours only when needed, e.g. "1:26:34" for 1hr videos.
+ */
+private fun formatVideoDuration(durationMs: Long): String {
+    val safeMs = durationMs.coerceAtLeast(0)
+    val totalSeconds = safeMs / 1000
+    val hours = totalSeconds / 3600
+    val minutes = (totalSeconds % 3600) / 60
+    val seconds = totalSeconds % 60
+    return if (hours > 0) {
+        "%d:%02d:%02d".format(hours, minutes, seconds)
+    } else {
+        "%02d:%02d".format(minutes, seconds)
+    }
 }
 
 private fun Key.isTvSelectKey(): Boolean {

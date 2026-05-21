@@ -11,7 +11,9 @@ data class VideoMediaItem(
     val filePath: String? = null,
     val folderName: String = "Others",
     val mimeType: String? = null,
-    val subtitles: List<SubtitleTrack> = emptyList()
+    val subtitles: List<SubtitleTrack> = emptyList(),
+    // Duration in milliseconds — from MediaStore.Video.Media.DURATION
+    val duration: Long = 0L
 )
 
 data class SubtitleTrack(

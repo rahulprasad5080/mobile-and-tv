@@ -5,6 +5,7 @@ import android.os.Build
 import kotlin.OptIn
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
+import androidx.media3.exoplayer.SeekParameters
 import androidx.media3.common.Format
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
@@ -33,6 +34,9 @@ class PlayerManager(private val context: Context) {
         private var instance: ExoPlayer? = null
         private var currentMediaId: String? = null
         private var currentMediaMimeType: String? = null
+        // Persist selected track IDs across play/pause — Bug 3 fix
+        private var selectedAudioTrackId: String? = null
+        private var selectedSubtitleTrackId: String? = null
     }
 
     private val trackSelector = DefaultTrackSelector(context)
@@ -59,6 +63,8 @@ class PlayerManager(private val context: Context) {
             .setExceedAudioConstraintsIfNecessary(true)
             .setExceedRendererCapabilitiesIfNecessary(true)
             .setTunnelingEnabled(false)
+            // Bug 6 fix: explicitly enable subtitle/text tracks (were disabled by default)
+            .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
             .build()
 
         val loadControl = DefaultLoadControl.Builder()
@@ -88,6 +94,8 @@ class PlayerManager(private val context: Context) {
             )
             .build().apply {
                 playWhenReady = true
+                // TV devices don't need to pause on headphone disconnect
+                setHandleAudioBecomingNoisy(false)
                 addListener(object : Player.Listener {
                     override fun onPlaybackStateChanged(state: Int) {
                         _playbackState.value = when (state) {
@@ -199,6 +207,38 @@ class PlayerManager(private val context: Context) {
         instance?.seekTo(positionMs)
     }
 
+    /**
+     * Seek backward (e.g. Left arrow on TV remote).
+     * Uses PREVIOUS_SYNC for accurate backward seek — same as reference Player-master.
+     */
+    fun seekBackward(deltaMs: Long = 10_000L) {
+        val player = instance ?: return
+        val duration = player.duration.takeIf { it > 0 }
+        val target = if (duration != null) {
+            (player.currentPosition - deltaMs).coerceIn(0L, duration)
+        } else {
+            (player.currentPosition - deltaMs).coerceAtLeast(0L)
+        }
+        player.setSeekParameters(SeekParameters.PREVIOUS_SYNC)
+        player.seekTo(target)
+    }
+
+    /**
+     * Seek forward (e.g. Right arrow on TV remote).
+     * Uses NEXT_SYNC for accurate forward seek — same as reference Player-master.
+     */
+    fun seekForward(deltaMs: Long = 10_000L) {
+        val player = instance ?: return
+        val duration = player.duration.takeIf { it > 0 }
+        val target = if (duration != null) {
+            (player.currentPosition + deltaMs).coerceIn(0L, duration)
+        } else {
+            (player.currentPosition + deltaMs).coerceAtLeast(0L)
+        }
+        player.setSeekParameters(SeekParameters.NEXT_SYNC)
+        player.seekTo(target)
+    }
+
     fun releasePlayer() {
         instance?.stop()
         instance?.clearMediaItems()
@@ -212,21 +252,30 @@ class PlayerManager(private val context: Context) {
     fun getAudioTracks(): List<AudioTrackInfo> {
         val tracks = _currentTracks.value ?: return emptyList()
         val audioTracks = mutableListOf<AudioTrackInfo>()
-        
+
         for (groupIndex in 0 until tracks.groups.size) {
             val group = tracks.groups[groupIndex]
-            if (group.type == C.TRACK_TYPE_AUDIO) {
+            // Bug 5 fix: also check mime type as fallback for MKV multi-audio detection
+            val isAudioGroup = group.type == C.TRACK_TYPE_AUDIO ||
+                (group.length > 0 && group.getTrackFormat(0).sampleMimeType?.startsWith("audio/") == true)
+            if (isAudioGroup) {
                 for (i in 0 until group.length) {
                     val format = group.getTrackFormat(i)
+                    val trackId = "audio_${groupIndex}_$i"
                     audioTracks.add(
                         AudioTrackInfo(
-                            id = "audio_${groupIndex}_$i",
+                            id = trackId,
                             language = format.language,
                             label = format.label,
                             bitRate = format.bitrate,
                             channelCount = format.channelCount,
                             displayLabel = buildAudioTrackLabel(format.label, format.language, format.channelCount),
-                            isSelected = group.isTrackSelected(i)
+                            // Bug 3 fix: use persisted selectedAudioTrackId instead of volatile isTrackSelected
+                            isSelected = if (selectedAudioTrackId != null) {
+                                trackId == selectedAudioTrackId
+                            } else {
+                                group.isTrackSelected(i)
+                            }
                         )
                     )
                 }
@@ -241,16 +290,24 @@ class PlayerManager(private val context: Context) {
 
         for (groupIndex in 0 until tracks.groups.size) {
             val group = tracks.groups[groupIndex]
-            if (group.type == C.TRACK_TYPE_TEXT) {
+            val isTextGroup = group.type == C.TRACK_TYPE_TEXT ||
+                (group.length > 0 && group.getTrackFormat(0).sampleMimeType?.startsWith("text/") == true)
+            if (isTextGroup) {
                 for (i in 0 until group.length) {
                     val format = group.getTrackFormat(i)
+                    val trackId = "subtitle_${groupIndex}_$i"
                     subtitleTracks.add(
                         SubtitleTrackInfo(
-                            id = "subtitle_${groupIndex}_$i",
+                            id = trackId,
                             language = format.language,
                             label = format.label,
                             displayLabel = buildSubtitleTrackLabel(format.label, format.language),
-                            isSelected = group.isTrackSelected(i)
+                            // Bug 3 fix: use persisted selectedSubtitleTrackId
+                            isSelected = if (selectedSubtitleTrackId != null) {
+                                trackId == selectedSubtitleTrackId
+                            } else {
+                                group.isTrackSelected(i)
+                            }
                         )
                     )
                 }
@@ -263,13 +320,15 @@ class PlayerManager(private val context: Context) {
         val tracks = _currentTracks.value ?: return
         val parts = trackId.split("_")
         if (parts.size < 3) return
-        
+
         val groupIndex = parts[1].toIntOrNull() ?: return
         val trackIndex = parts[2].toIntOrNull() ?: return
-        
+
         if (groupIndex < tracks.groups.size) {
             val group = tracks.groups[groupIndex]
             if (trackIndex < group.length) {
+                // Bug 3 fix: persist selection so popup shows correct state after play/pause
+                selectedAudioTrackId = trackId
                 trackSelector.parameters = trackSelector.buildUponParameters()
                     .setOverrideForType(TrackSelectionOverride(group.mediaTrackGroup, trackIndex))
                     .build()
@@ -279,6 +338,8 @@ class PlayerManager(private val context: Context) {
 
     fun selectSubtitleTrack(trackId: String?) {
         if (trackId == null) {
+            // Bug 3 fix: clear persisted subtitle selection
+            selectedSubtitleTrackId = null
             trackSelector.parameters = trackSelector.buildUponParameters()
                 .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
                 .build()
@@ -295,6 +356,8 @@ class PlayerManager(private val context: Context) {
         if (groupIndex < tracks.groups.size) {
             val group = tracks.groups[groupIndex]
             if (trackIndex < group.length) {
+                // Bug 3 fix: persist selection
+                selectedSubtitleTrackId = trackId
                 trackSelector.parameters = trackSelector.buildUponParameters()
                     .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
                     .setOverrideForType(TrackSelectionOverride(group.mediaTrackGroup, trackIndex))

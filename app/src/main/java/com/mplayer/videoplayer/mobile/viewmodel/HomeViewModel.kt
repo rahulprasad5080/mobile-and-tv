@@ -298,27 +298,9 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         if (!success) {
             pDeleteId?.let { _deletedIds.value = _deletedIds.value - it }
             pRenameId?.let { _renamedItems.value = _renamedItems.value - it }
-            loadVideos()
-        } else {
-            if (pRenameId != null) {
-                val newName = _renamedItems.value[pRenameId]
-                val video = _videos.value.find { it.id == pRenameId }
-                if (newName != null && video != null) {
-                    viewModelScope.launch {
-                        try {
-                            fileRepository.renameVideo(getApplication(), video.uri, newName)
-                        } catch (_: Exception) {
-                            _renamedItems.value = _renamedItems.value - pRenameId
-                        }
-                        loadVideos()
-                    }
-                } else {
-                    loadVideos()
-                }
-            } else {
-                loadVideos()
-            }
         }
+        // Always refresh after intent result — OS handles the actual rename/delete on success
+        loadVideos()
     }
 
     override fun onCleared() {

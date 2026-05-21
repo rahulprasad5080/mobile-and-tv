@@ -88,6 +88,7 @@ fun FolderVideosScreen(
 ) {
     var videoToRename by remember { mutableStateOf<VideoMediaItem?>(null) }
     var videoToDelete by remember { mutableStateOf<VideoMediaItem?>(null) }
+    // Show name without extension so user doesn't accidentally change/remove it
     var newName by remember { mutableStateOf("") }
     var selectedIds by remember(videos) { mutableStateOf(emptySet<String>()) }
     var pendingAction by remember { mutableStateOf<FileAction?>(null) }
@@ -219,7 +220,11 @@ fun FolderVideosScreen(
                     onSelect = {
                         selectedIds = selectedIds.toggle(video.id)
                     },
-                    onRename = { videoToRename = video; newName = video.title },
+                    onRename = {
+                        videoToRename = video
+                        // Show name without extension — repository adds it back on save
+                        newName = video.title.substringBeforeLast('.').ifBlank { video.title }
+                    },
                     onDelete = { videoToDelete = video },
                     onCopy = { onCopy(video) }
                 )
@@ -227,6 +232,7 @@ fun FolderVideosScreen(
         }
     }
 
+    // Rename Dialog
     if (videoToRename != null) {
         AlertDialog(
             onDismissRequest = { videoToRename = null },
@@ -241,7 +247,9 @@ fun FolderVideosScreen(
             },
             confirmButton = {
                 TextButton(onClick = {
-                    onRename(videoToRename!!, newName)
+                    // Repository adds extension back — pass name without extension
+                    val nameWithoutExt = newName.substringBeforeLast('.').ifBlank { newName }
+                    onRename(videoToRename!!, nameWithoutExt)
                     videoToRename = null
                 }) {
                     Text("Rename")
@@ -255,6 +263,7 @@ fun FolderVideosScreen(
         )
     }
 
+    // Delete Dialog
     if (videoToDelete != null) {
         AlertDialog(
             onDismissRequest = { videoToDelete = null },
@@ -276,6 +285,7 @@ fun FolderVideosScreen(
         )
     }
 
+    // Copy/Move folder picker dialog
     if (pendingAction != null) {
         FolderDestinationDialog(
             action = pendingAction!!,
@@ -373,6 +383,15 @@ fun VideoListItem(
                     ),
                     maxLines = 1
                 )
+                // Bug 7 fix: show duration in H:MM:SS
+                if (video.duration > 0) {
+                    Text(
+                        text = formatVideoDuration(video.duration),
+                        style = MaterialTheme.typography.bodySmall.copy(
+                            color = Color.White.copy(alpha = 0.55f)
+                        )
+                    )
+                }
             }
 
             if (!selectionMode) {
@@ -452,4 +471,20 @@ fun FolderDestinationDialog(
 
 private fun Set<String>.toggle(id: String): Set<String> {
     return if (id in this) this - id else this + id
+}
+
+/**
+ * Bug 7 fix: Format duration from milliseconds to H:MM:SS or MM:SS.
+ */
+fun formatVideoDuration(durationMs: Long): String {
+    val safeMs = durationMs.coerceAtLeast(0)
+    val totalSeconds = safeMs / 1000
+    val hours = totalSeconds / 3600
+    val minutes = (totalSeconds % 3600) / 60
+    val seconds = totalSeconds % 60
+    return if (hours > 0) {
+        "%d:%02d:%02d".format(hours, minutes, seconds)
+    } else {
+        "%02d:%02d".format(minutes, seconds)
+    }
 }

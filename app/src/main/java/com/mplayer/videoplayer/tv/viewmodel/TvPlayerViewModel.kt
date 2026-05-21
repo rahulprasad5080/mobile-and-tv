@@ -84,13 +84,16 @@ class TvPlayerViewModel(application: Application) : AndroidViewModel(application
                     _duration.value = player.duration.coerceAtLeast(0)
                     _isPlaying.value = player.isPlaying
                 }
-                delay(1000)
+                delay(500) // 500ms for responsive TV remote seeking (was 1000ms)
             }
         }
     }
 
     fun playMedia(item: VideoMediaItem, startPositionMs: Long = 0) {
+        // Cancel any pending release — prevents race condition where old releaseJob
+        // would release the player we just started (reference: Player-master lifecycle logic)
         releaseJob?.cancel()
+        releaseJob = null
         currentVideo
             ?.takeIf { it.id != item.id }
             ?.let { progressRepository.saveProgress(it.id, playerManager.getPlayer()?.currentPosition ?: 0L) }
@@ -127,17 +130,22 @@ class TvPlayerViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
+    /**
+     * Seek by delta — uses SeekParameters for TV-quality seeking.
+     * Negative delta = backward (PREVIOUS_SYNC), positive = forward (NEXT_SYNC).
+     * Mirrors reference Player-master DPAD_LEFT/RIGHT logic.
+     */
     fun seekBy(deltaMs: Long) {
-        val player = playerManager.getPlayer() ?: return
-        val duration = player.duration.takeIf { it > 0 }
-        val nextPosition = if (duration != null) {
-            (player.currentPosition + deltaMs).coerceIn(0, duration)
+        if (deltaMs < 0) {
+            playerManager.seekBackward(-deltaMs)
         } else {
-            (player.currentPosition + deltaMs).coerceAtLeast(0)
+            playerManager.seekForward(deltaMs)
         }
-        playerManager.seekTo(nextPosition)
-        _currentPosition.value = nextPosition
-        _isPlaying.value = player.playWhenReady
+        val player = playerManager.getPlayer()
+        if (player != null) {
+            _currentPosition.value = player.currentPosition
+            _isPlaying.value = player.playWhenReady
+        }
     }
 
     fun seekTo(position: Long) {

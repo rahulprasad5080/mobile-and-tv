@@ -1,6 +1,7 @@
 package com.mplayer.videoplayer.tv.ui.screen.player
 
 import android.app.Activity
+import android.media.AudioManager
 import android.view.ViewGroup
 import android.widget.FrameLayout
 import androidx.activity.compose.BackHandler
@@ -148,6 +149,19 @@ fun TvPlayerScreen(
     val lifecycleOwner = LocalLifecycleOwner.current
     var wasPlayingBeforePause by remember { mutableStateOf(false) }
 
+    // Keep screen on while playing — mirrors reference Player-master setKeepScreenOn(isPlaying)
+    val activity = context as? Activity
+    DisposableEffect(isPlaying) {
+        if (isPlaying) {
+            activity?.window?.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        } else {
+            activity?.window?.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        }
+        onDispose {
+            activity?.window?.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        }
+    }
+
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
@@ -191,8 +205,8 @@ fun TvPlayerScreen(
     }
 
     LaunchedEffect(screenBrightness) {
-        val activity = context as? Activity ?: return@LaunchedEffect
-        activity.window.attributes = activity.window.attributes.apply {
+        val act = context as? Activity ?: return@LaunchedEffect
+        act.window.attributes = act.window.attributes.apply {
             this.screenBrightness = screenBrightness
         }
     }
@@ -280,6 +294,25 @@ fun TvPlayerScreen(
                         showControls = true
                         true
                     }
+                    // Volume keys — mirrors reference Player-master KEYCODE_VOLUME_UP/DOWN handling
+                    Key.VolumeUp -> {
+                        val audioManager = context.getSystemService(android.content.Context.AUDIO_SERVICE) as AudioManager
+                        audioManager.adjustStreamVolume(
+                            AudioManager.STREAM_MUSIC,
+                            AudioManager.ADJUST_RAISE,
+                            AudioManager.FLAG_REMOVE_SOUND_AND_VIBRATE
+                        )
+                        true
+                    }
+                    Key.VolumeDown -> {
+                        val audioManager = context.getSystemService(android.content.Context.AUDIO_SERVICE) as AudioManager
+                        audioManager.adjustStreamVolume(
+                            AudioManager.STREAM_MUSIC,
+                            AudioManager.ADJUST_LOWER,
+                            AudioManager.FLAG_REMOVE_SOUND_AND_VIBRATE
+                        )
+                        true
+                    }
                     Key.DirectionCenter,
                     Key.Enter -> {
                         if (!showControls) {
@@ -290,7 +323,8 @@ fun TvPlayerScreen(
                         }
                     }
                     Key.DirectionLeft -> {
-                        if (isRepeatedKey) return@onPreviewKeyEvent !showControls
+                        // Allow repeated presses for continuous seeking while D-pad held down
+                        // Mirrors reference Player-master KEYCODE_DPAD_LEFT repeat handling
                         if (!showControls) {
                             viewModel.seekBy(-10_000)
                             restorePlayFocus()
@@ -300,7 +334,8 @@ fun TvPlayerScreen(
                         }
                     }
                     Key.DirectionRight -> {
-                        if (isRepeatedKey) return@onPreviewKeyEvent !showControls
+                        // Allow repeated presses for continuous seeking while D-pad held down
+                        // Mirrors reference Player-master KEYCODE_DPAD_RIGHT repeat handling
                         if (!showControls) {
                             viewModel.seekBy(10_000)
                             restorePlayFocus()
@@ -464,30 +499,38 @@ fun TvPlayerScreen(
     }
 
     if (showAudioPopup) {
+        // Bug 5 fix: pause player to prevent hang on Android 14 when popup opens
+        LaunchedEffect(Unit) { viewModel.playerManager.pause() }
         TvAudioTracksPopup(
             audioTracks = audioTracks,
             onDismiss = {
                 showAudioPopup = false
+                viewModel.playerManager.resume()
                 restorePlayFocus()
             },
             onAudioSelect = {
                 viewModel.selectAudioTrack(it)
                 showAudioPopup = false
+                viewModel.playerManager.resume()
                 restorePlayFocus()
             }
         )
     }
 
     if (showSubtitlePopup) {
+        // Bug 5 fix: pause player to prevent hang on Android 14 when popup opens
+        LaunchedEffect(Unit) { viewModel.playerManager.pause() }
         TvSubtitleTracksPopup(
             subtitleTracks = subtitleTracks,
             onDismiss = {
                 showSubtitlePopup = false
+                viewModel.playerManager.resume()
                 restorePlayFocus()
             },
             onSubtitleSelect = {
                 viewModel.selectSubtitleTrack(it)
                 showSubtitlePopup = false
+                viewModel.playerManager.resume()
                 restorePlayFocus()
             }
         )
@@ -927,8 +970,9 @@ private fun TvSmallPopup(
     ) {
         Card(
             modifier = Modifier
-                .fillMaxHeight(0.85f)
-                .widthIn(min = 340.dp, max = 400.dp)
+                // Bug 4 fix: reduced popup size — was 0.85f which was too large on TV
+                .fillMaxHeight(0.50f)
+                .widthIn(min = 260.dp, max = 300.dp)
                 .padding(end = 48.dp),
             shape = RoundedCornerShape(12.dp),
             colors = CardDefaults.cardColors(containerColor = TvPanel),
@@ -1003,8 +1047,9 @@ private fun TvPlayerSettingsDialog(
     ) {
         Card(
             modifier = Modifier
-                .fillMaxHeight(0.85f)
-                .widthIn(min = 360.dp, max = 420.dp)
+                // Bug 4 fix: reduced settings popup size
+                .fillMaxHeight(0.60f)
+                .widthIn(min = 280.dp, max = 340.dp)
                 .padding(end = 48.dp),
             shape = RoundedCornerShape(12.dp),
             colors = CardDefaults.cardColors(containerColor = TvPanel),
