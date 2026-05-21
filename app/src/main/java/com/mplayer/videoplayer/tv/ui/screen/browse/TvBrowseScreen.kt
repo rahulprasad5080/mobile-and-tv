@@ -39,11 +39,13 @@ import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.Movie
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -116,37 +118,109 @@ fun TvBrowseScreen(
         else videos.filter { it.cleanTvTitle().contains(searchQuery, ignoreCase = true) }
     }
     val folders = remember(filteredVideos) { buildFolders(filteredVideos) }
-    val firstItemFocusRequester = remember { FocusRequester() }
 
-    LaunchedEffect(filteredVideos, selectedFolder?.path, selectedFolder?.name, isGridView, videoToRename, videoToDelete, showSearch) {
+    val filteredFolderVideos = remember(selectedFolder, searchQuery) {
+        val folderVideos = selectedFolder?.videos.orEmpty()
+        if (searchQuery.isBlank()) folderVideos
+        else folderVideos.filter { it.cleanTvTitle().contains(searchQuery, ignoreCase = true) }
+    }
+
+    val firstItemFocusRequester = remember { FocusRequester() }
+    val searchFocusRequester = remember { FocusRequester() }
+
+    LaunchedEffect(showSearch) {
+        if (showSearch) {
+            delay(150)
+            runCatching { searchFocusRequester.requestFocus() }
+        }
+    }
+
+    LaunchedEffect(filteredVideos, filteredFolderVideos, selectedFolder?.path, selectedFolder?.name, isGridView, videoToRename, videoToDelete, showSearch) {
         if (videoToRename != null || videoToDelete != null || showSearch) return@LaunchedEffect
         delay(120)
         runCatching { firstItemFocusRequester.requestFocus() }
     }
 
-    BackHandler(enabled = selectedFolder != null) {
-        selectedFolder = null
+    BackHandler(enabled = selectedFolder != null || searchQuery.isNotBlank() || showSearch) {
+        if (selectedFolder != null) {
+            selectedFolder = null
+        } else {
+            showSearch = false
+            searchQuery = ""
+        }
     }
 
     Surface(color = FileScreenBackground, modifier = Modifier.fillMaxSize()) {
         Column(modifier = Modifier.fillMaxSize()) {
-            FileToolbar(
-                title = selectedFolder?.name ?: "Folders",
-                subtitle = selectedFolder
-                    ?.let { "${it.videos.size} videos" }
-                    ?: "${folders.size} folders, ${filteredVideos.size} videos",
-                showBack = selectedFolder != null,
-                isGridView = isGridView,
-                topBarFocusRequester = if ((selectedFolder != null && selectedFolder?.videos?.isEmpty() == true) || (selectedFolder == null && filteredVideos.isEmpty())) firstItemFocusRequester else null,
-                onBack = { selectedFolder = null },
-                onToggleView = { isGridView = !isGridView },
-                onRefresh = { viewModel.loadVideos() },
-                onPlayAll = {
-                    val listToPlay = selectedFolder?.videos ?: filteredVideos
-                    if (listToPlay.isNotEmpty()) onPlayAllClick(listToPlay)
-                },
-                onSearchClick = { showSearch = true }
-            )
+            if (showSearch) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(78.dp)
+                        .background(Color.White)
+                        .border(1.dp, FilePanelLine)
+                        .padding(horizontal = 28.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    TvBrowseIconButton(
+                        onClick = {
+                            showSearch = false
+                            searchQuery = ""
+                        },
+                        modifier = Modifier.size(48.dp)
+                    ) {
+                        Icon(Icons.Rounded.ArrowBack, contentDescription = "Close Search", tint = FileText)
+                    }
+                    
+                    Spacer(modifier = Modifier.width(16.dp))
+                    
+                    OutlinedTextField(
+                        value = searchQuery,
+                        onValueChange = { searchQuery = it },
+                        placeholder = { Text("Search videos by title...", color = FileMuted) },
+                        singleLine = true,
+                        modifier = Modifier
+                            .weight(1f)
+                            .focusRequester(searchFocusRequester),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedContainerColor = FileFocus,
+                            unfocusedContainerColor = Color.Transparent,
+                            focusedBorderColor = FileAccent,
+                            unfocusedBorderColor = FilePanelLine,
+                            cursorColor = FileAccent
+                        ),
+                        shape = RoundedCornerShape(24.dp),
+                        leadingIcon = {
+                            Icon(Icons.Rounded.Search, contentDescription = null, tint = FileMuted)
+                        },
+                        trailingIcon = {
+                            if (searchQuery.isNotEmpty()) {
+                                IconButton(onClick = { searchQuery = "" }) {
+                                    Icon(Icons.Rounded.Close, contentDescription = "Clear search", tint = FileMuted)
+                                }
+                            }
+                        }
+                    )
+                }
+            } else {
+                FileToolbar(
+                    title = selectedFolder?.name ?: "Folders",
+                    subtitle = selectedFolder
+                        ?.let { "${filteredFolderVideos.size} videos" }
+                        ?: "${folders.size} folders, ${filteredVideos.size} videos",
+                    showBack = selectedFolder != null,
+                    isGridView = isGridView,
+                    topBarFocusRequester = if ((selectedFolder != null && filteredFolderVideos.isEmpty()) || (selectedFolder == null && filteredVideos.isEmpty())) firstItemFocusRequester else null,
+                    onBack = { selectedFolder = null },
+                    onToggleView = { isGridView = !isGridView },
+                    onRefresh = { viewModel.loadVideos() },
+                    onPlayAll = {
+                        val listToPlay = if (selectedFolder != null) filteredFolderVideos else filteredVideos
+                        if (listToPlay.isNotEmpty()) onPlayAllClick(listToPlay)
+                    },
+                    onSearchClick = { showSearch = true }
+                )
+            }
 
             if (filteredVideos.isEmpty()) {
                 EmptyLibraryMessage()
@@ -167,7 +241,7 @@ fun TvBrowseScreen(
             } else {
                 if (isGridView) {
                     VideoGrid(
-                        videos = selectedFolder?.videos.orEmpty(),
+                        videos = filteredFolderVideos,
                         firstItemFocusRequester = firstItemFocusRequester,
                         onVideoClick = onVideoClick,
                         onRenameClick = { video ->
@@ -179,7 +253,7 @@ fun TvBrowseScreen(
                     )
                 } else {
                     VideoList(
-                        videos = selectedFolder?.videos.orEmpty(),
+                        videos = filteredFolderVideos,
                         firstItemFocusRequester = firstItemFocusRequester,
                         onVideoClick = onVideoClick,
                         onRenameClick = { video ->
@@ -195,6 +269,11 @@ fun TvBrowseScreen(
     }
 
     videoToRename?.let { video ->
+        val renameFocusRequester = remember { FocusRequester() }
+        LaunchedEffect(video) {
+            delay(150)
+            runCatching { renameFocusRequester.requestFocus() }
+        }
         AlertDialog(
             onDismissRequest = { videoToRename = null },
             title = { Text("Rename Video") },
@@ -203,7 +282,8 @@ fun TvBrowseScreen(
                     value = renameText,
                     onValueChange = { renameText = it },
                     singleLine = true,
-                    label = { Text("Video name") }
+                    label = { Text("Video name") },
+                    modifier = Modifier.focusRequester(renameFocusRequester)
                 )
             },
             confirmButton = {
@@ -249,41 +329,7 @@ fun TvBrowseScreen(
         )
     }
 
-    if (showSearch) {
-        var tempSearchQuery by remember { mutableStateOf(searchQuery) }
-        AlertDialog(
-            onDismissRequest = { showSearch = false },
-            title = { Text("Search Videos") },
-            text = {
-                OutlinedTextField(
-                    value = tempSearchQuery,
-                    onValueChange = { tempSearchQuery = it },
-                    singleLine = true,
-                    label = { Text("Video title") }
-                )
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        searchQuery = tempSearchQuery
-                        showSearch = false
-                    }
-                ) {
-                    Text("Search")
-                }
-            },
-            dismissButton = {
-                TextButton(
-                    onClick = {
-                        searchQuery = ""
-                        showSearch = false
-                    }
-                ) {
-                    Text("Clear Search")
-                }
-            }
-        )
-    }
+
 }
 
 @Composable
@@ -401,19 +447,21 @@ private fun TvBrowseIconButton(
             )
             .onFocusChanged { isFocused = it.isFocused }
             .onPreviewKeyEvent { event ->
-                when {
-                    event.type != KeyEventType.KeyDown -> false
-                    event.isTvSelectDown() -> {
-                        if (event.isInitialTvSelectDown()) {
-                            onClick()
-                        }
-                        true
+                if (event.key.isTvSelectKey()) {
+                    if (event.type == KeyEventType.KeyDown && event.nativeKeyEvent.repeatCount == 0) {
+                        onClick()
                     }
-                    event.key == Key.DirectionLeft -> focusManager.moveFocus(FocusDirection.Left)
-                    event.key == Key.DirectionRight -> focusManager.moveFocus(FocusDirection.Right)
-                    event.key == Key.DirectionUp -> focusManager.moveFocus(FocusDirection.Up)
-                    event.key == Key.DirectionDown -> focusManager.moveFocus(FocusDirection.Down)
-                    else -> false
+                    true
+                } else if (event.type != KeyEventType.KeyDown) {
+                    false
+                } else {
+                    when (event.key) {
+                        Key.DirectionLeft -> focusManager.moveFocus(FocusDirection.Left)
+                        Key.DirectionRight -> focusManager.moveFocus(FocusDirection.Right)
+                        Key.DirectionUp -> focusManager.moveFocus(FocusDirection.Up)
+                        Key.DirectionDown -> focusManager.moveFocus(FocusDirection.Down)
+                        else -> false
+                    }
                 }
             }
     ) {
@@ -704,8 +752,8 @@ private fun FileListRow(
                 }
             }
             .onPreviewKeyEvent { event ->
-                if (event.isTvSelectDown()) {
-                    if (event.isInitialTvSelectDown()) {
+                if (event.key.isTvSelectKey()) {
+                    if (event.type == KeyEventType.KeyDown && event.nativeKeyEvent.repeatCount == 0) {
                         onClick()
                     }
                     true
@@ -805,8 +853,8 @@ private fun FileGridCard(
                 }
             }
             .onPreviewKeyEvent { event ->
-                if (event.isTvSelectDown()) {
-                    if (event.isInitialTvSelectDown()) {
+                if (event.key.isTvSelectKey()) {
+                    if (event.type == KeyEventType.KeyDown && event.nativeKeyEvent.repeatCount == 0) {
                         onClick()
                     }
                     true

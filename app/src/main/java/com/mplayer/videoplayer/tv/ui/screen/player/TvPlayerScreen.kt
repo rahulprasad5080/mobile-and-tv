@@ -34,6 +34,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
@@ -57,6 +58,8 @@ import androidx.compose.material.icons.rounded.Tv
 import androidx.compose.material.icons.rounded.VolumeUp
 import androidx.compose.material.icons.rounded.Repeat
 import androidx.compose.material.icons.rounded.FlashOn
+import androidx.compose.material.icons.rounded.RadioButtonChecked
+import androidx.compose.material.icons.rounded.RadioButtonUnchecked
 import com.mplayer.videoplayer.tv.util.FrameRateHelper
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
@@ -142,20 +145,22 @@ fun TvPlayerScreen(
     
     val currentVideo = viewModel.currentVideoVal
     val autoFrameRate by viewModel.autoFrameRate.collectAsState()
-    val skipSilence by viewModel.skipSilence.collectAsState()
     val volumeBoost by viewModel.volumeBoost.collectAsState()
     val repeatMode by viewModel.repeatMode.collectAsState()
-    val tunneling by viewModel.tunneling.collectAsState()
     val context = LocalContext.current
     var showControls by remember { mutableStateOf(true) }
     var showSettings by remember { mutableStateOf(false) }
     var showAudioPopup by remember { mutableStateOf(false) }
     var showSubtitlePopup by remember { mutableStateOf(false) }
-    var screenBrightness by remember { mutableStateOf(0.5f) }
     var subtitleSize by remember { mutableStateOf(SubtitleSize.Medium) }
     var playerView by remember { mutableStateOf<PlayerView?>(null) }
     val rootFocusRequester = remember { FocusRequester() }
     val playFocusRequester = remember { FocusRequester() }
+    val audioFocusRequester = remember { FocusRequester() }
+    val subtitleFocusRequester = remember { FocusRequester() }
+    val settingsFocusRequester = remember { FocusRequester() }
+    var focusToRestore by remember { mutableStateOf<FocusRequester?>(null) }
+    var controlsInteractionTrigger by remember { mutableStateOf(0) }
     val focusScope = rememberCoroutineScope()
     val isModalOpen = showSettings || showAudioPopup || showSubtitlePopup
 
@@ -204,8 +209,6 @@ fun TvPlayerScreen(
             showSubtitlePopup = false
         } else if (showSettings) {
             showSettings = false
-        } else if (showControls) {
-            showControls = false
         } else {
             onBackPressed()
         }
@@ -234,18 +237,12 @@ fun TvPlayerScreen(
         }
     }
 
-    LaunchedEffect(screenBrightness) {
-        val act = context as? Activity ?: return@LaunchedEffect
-        act.window.attributes = act.window.attributes.apply {
-            this.screenBrightness = screenBrightness
-        }
-    }
 
     LaunchedEffect(playerView, subtitleSize) {
         playerView?.applyNetflixSubtitleStyle(subtitleSize, isTv = true)
     }
 
-    LaunchedEffect(showControls, isModalOpen, isPlaying) {
+    LaunchedEffect(showControls, isModalOpen, isPlaying, controlsInteractionTrigger) {
         if (showControls && !isModalOpen && isPlaying) {
             delay(4_000)
             showControls = false
@@ -257,7 +254,9 @@ fun TvPlayerScreen(
             runCatching { rootFocusRequester.requestFocus() }
         } else if (showControls && !isModalOpen) {
             delay(100)
-            runCatching { playFocusRequester.requestFocus() }
+            val requester = focusToRestore ?: playFocusRequester
+            runCatching { requester.requestFocus() }
+            focusToRestore = null
         }
     }
 
@@ -469,15 +468,23 @@ fun TvPlayerScreen(
             TvPlayerTopBar(
                 title = currentTitle.ifBlank { "Now Playing" },
                 onBackPressed = onBackPressed,
+                audioFocusRequester = audioFocusRequester,
+                subtitleFocusRequester = subtitleFocusRequester,
+                settingsFocusRequester = settingsFocusRequester,
                 onAudioClick = {
+                    focusToRestore = audioFocusRequester
                     showAudioPopup = true
                     showControls = true
                 },
                 onSubtitleClick = {
+                    focusToRestore = subtitleFocusRequester
                     showSubtitlePopup = true
                     showControls = true
                 },
-                onSettingsClick = { showSettings = true }
+                onSettingsClick = {
+                    focusToRestore = settingsFocusRequester
+                    showSettings = true
+                }
             )
         }
 
@@ -494,34 +501,41 @@ fun TvPlayerScreen(
                 playFocusRequester = playFocusRequester,
                 onSeekTo = {
                     viewModel.seekTo(it)
-                    restorePlayFocus()
+                    showControls = true
+                    controlsInteractionTrigger++
                 },
                 onPrevious = {
                     viewModel.playPrevious()
-                    restorePlayFocus()
+                    showControls = true
+                    controlsInteractionTrigger++
                 },
                 onRewind = {
                     viewModel.seekBy(-10_000)
-                    restorePlayFocus()
+                    showControls = true
+                    controlsInteractionTrigger++
                 },
                 onPlayPause = {
                     viewModel.togglePlayPause()
-                    restorePlayFocus()
+                    showControls = true
+                    controlsInteractionTrigger++
                 },
                 onForward = {
                     viewModel.seekBy(10_000)
-                    restorePlayFocus()
+                    showControls = true
+                    controlsInteractionTrigger++
                 },
                 onNext = {
                     viewModel.playNext()
-                    restorePlayFocus()
+                    showControls = true
+                    controlsInteractionTrigger++
                 },
                 onScreenSize = {
                     val nextMode = nextResizeMode(resizeMode)
                     viewModel.setResizeMode(nextMode)
                     val modeName = resizeModeOptions.find { it.first == nextMode }?.second ?: "Default"
                     android.widget.Toast.makeText(context, "Screen Size: $modeName", android.widget.Toast.LENGTH_SHORT).show()
-                    restorePlayFocus()
+                    showControls = true
+                    controlsInteractionTrigger++
                 }
             )
         }
@@ -536,13 +550,11 @@ fun TvPlayerScreen(
             onDismiss = {
                 showAudioPopup = false
                 viewModel.playerManager.resume()
-                restorePlayFocus()
             },
             onAudioSelect = {
                 viewModel.selectAudioTrack(it)
                 showAudioPopup = false
                 viewModel.playerManager.resume()
-                restorePlayFocus()
             }
         )
     }
@@ -555,65 +567,39 @@ fun TvPlayerScreen(
             onDismiss = {
                 showSubtitlePopup = false
                 viewModel.playerManager.resume()
-                restorePlayFocus()
             },
             onSubtitleSelect = {
                 viewModel.selectSubtitleTrack(it)
                 showSubtitlePopup = false
                 viewModel.playerManager.resume()
-                restorePlayFocus()
             }
         )
     }
 
     if (showSettings) {
+        LaunchedEffect(Unit) { viewModel.playerManager.pause() }
         TvPlayerSettingsDialog(
             onDismiss = {
                 showSettings = false
-                restorePlayFocus()
+                viewModel.playerManager.resume()
             },
             playbackSpeed = playbackSpeed,
-            screenBrightness = screenBrightness,
-            onBrightnessDown = {
-                screenBrightness = (screenBrightness - 0.1f).coerceIn(0.05f, 1f)
-                showControls = true
-            },
-            onBrightnessUp = {
-                screenBrightness = (screenBrightness + 0.1f).coerceIn(0.05f, 1f)
-                showControls = true
-            },
-            onBrightnessChange = {
-                screenBrightness = it.coerceIn(0.05f, 1f)
-                showControls = true
-            },
             onSpeedChange = {
                 viewModel.setPlaybackSpeed(it)
                 showControls = true
-            },
-            autoFrameRate = autoFrameRate,
-            onAutoFrameRateChange = {
-                viewModel.toggleAutoFrameRate()
-                showControls = true
-            },
-            skipSilence = skipSilence,
-            onSkipSilenceChange = {
-                viewModel.toggleSkipSilence()
-                showControls = true
+                controlsInteractionTrigger++
             },
             volumeBoost = volumeBoost,
             onVolumeBoostChange = {
                 viewModel.setVolumeBoost(it)
                 showControls = true
+                controlsInteractionTrigger++
             },
             repeatMode = repeatMode,
             onRepeatModeChange = {
                 viewModel.toggleRepeatMode()
                 showControls = true
-            },
-            tunneling = tunneling,
-            onTunnelingChange = {
-                viewModel.toggleTunneling()
-                showControls = true
+                controlsInteractionTrigger++
             }
         )
     }
@@ -623,6 +609,9 @@ fun TvPlayerScreen(
 private fun TvPlayerTopBar(
     title: String,
     onBackPressed: () -> Unit,
+    audioFocusRequester: FocusRequester,
+    subtitleFocusRequester: FocusRequester,
+    settingsFocusRequester: FocusRequester,
     onAudioClick: () -> Unit,
     onSubtitleClick: () -> Unit,
     onSettingsClick: () -> Unit
@@ -638,7 +627,7 @@ private fun TvPlayerTopBar(
             modifier = Modifier.weight(1f),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            TvIconOnlyButton(Icons.Rounded.ArrowBack, "Back", onBackPressed)
+            TvIconOnlyButton(icon = Icons.Rounded.ArrowBack, contentDescription = "Back", onClick = onBackPressed)
             Spacer(modifier = Modifier.width(18.dp))
 
             Text(
@@ -654,12 +643,12 @@ private fun TvPlayerTopBar(
 
         Row(
             modifier = Modifier.padding(start = 24.dp),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            horizontalArrangement = Arrangement.spacedBy(20.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            TvIconOnlyButton(Icons.Rounded.Audiotrack, "Audio language", onAudioClick)
-            TvIconOnlyButton(Icons.Rounded.Subtitles, "Subtitles", onSubtitleClick)
-            TvIconOnlyButton(Icons.Rounded.Settings, "Settings", onSettingsClick)
+            TvIconOnlyButton(icon = Icons.Rounded.Audiotrack, contentDescription = "Audio language", focusRequester = audioFocusRequester, onClick = onAudioClick)
+            TvIconOnlyButton(icon = Icons.Rounded.Subtitles, contentDescription = "Subtitles", focusRequester = subtitleFocusRequester, onClick = onSubtitleClick)
+            TvIconOnlyButton(icon = Icons.Rounded.Settings, contentDescription = "Settings", focusRequester = settingsFocusRequester, onClick = onSettingsClick)
         }
     }
 }
@@ -668,13 +657,16 @@ private fun TvPlayerTopBar(
 private fun TvIconOnlyButton(
     icon: ImageVector,
     contentDescription: String,
+    focusRequester: FocusRequester? = null,
     onClick: () -> Unit
 ) {
     var isFocused by remember { mutableStateOf(false) }
+    val requesterModifier = focusRequester?.let { Modifier.focusRequester(it) } ?: Modifier
     IconButton(
         onClick = onClick,
         modifier = Modifier
             .size(38.dp)
+            .then(requesterModifier)
             .clip(CircleShape)
             .background(if (isFocused) TvAccent else Color.White.copy(alpha = 0.12f))
             .border(
@@ -684,8 +676,8 @@ private fun TvIconOnlyButton(
             )
             .onFocusChanged { isFocused = it.isFocused }
             .onPreviewKeyEvent { event ->
-                if (event.isTvSelectDown()) {
-                    if (event.isInitialTvSelectDown()) {
+                if (event.key.isTvSelectKey()) {
+                    if (event.type == KeyEventType.KeyDown && event.nativeKeyEvent.repeatCount == 0) {
                         onClick()
                     }
                     true
@@ -795,8 +787,8 @@ private fun TvRoundControlButton(
             )
             .onFocusChanged { isFocused = it.isFocused }
             .onPreviewKeyEvent { event ->
-                if (event.isTvSelectDown()) {
-                    if (event.isInitialTvSelectDown()) {
+                if (event.key.isTvSelectKey()) {
+                    if (event.type == KeyEventType.KeyDown && event.nativeKeyEvent.repeatCount == 0) {
                         onClick()
                     }
                     true
@@ -1021,39 +1013,39 @@ private fun TvSmallPopup(
             }
             .focusable()
             .clickable(onClick = { }),
-        contentAlignment = Alignment.CenterEnd
+        contentAlignment = Alignment.Center
     ) {
         Card(
             modifier = Modifier
-                // Bug 4 fix: reduced popup size — was 0.85f which was too large on TV
-                .fillMaxHeight(0.50f)
-                .widthIn(min = 260.dp, max = 300.dp)
-                .padding(end = 48.dp),
-            shape = RoundedCornerShape(12.dp),
+                .width(420.dp)
+                .wrapContentHeight()
+                .padding(16.dp),
+            shape = RoundedCornerShape(16.dp),
             colors = CardDefaults.cardColors(containerColor = TvPanel),
             border = BorderStroke(1.dp, Color.White.copy(alpha = 0.12f))
         ) {
             LazyColumn(
                 modifier = Modifier
-                    .fillMaxSize()
-                    .padding(12.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp)
+                    .fillMaxWidth()
+                    .heightIn(max = 320.dp)
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 item {
                     DialogSectionHeader(icon = icon, title = title)
-                    Spacer(modifier = Modifier.height(6.dp))
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(1.dp)
+                            .background(Color.White.copy(alpha = 0.15f))
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
                 }
                 content()
                 item {
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Button(
-                        onClick = onDismiss,
-                        colors = ButtonDefaults.buttonColors(containerColor = TvAccent),
-                        modifier = Modifier.fillMaxWidth(),
-                        contentPadding = PaddingValues(vertical = 9.dp)
-                    ) {
-                        Text("Close", style = MaterialTheme.typography.titleMedium)
-                    }
+                    Spacer(modifier = Modifier.height(10.dp))
+                    TvCloseButton(onClick = onDismiss)
                 }
             }
         }
@@ -1065,21 +1057,11 @@ private fun TvSmallPopup(
 private fun TvPlayerSettingsDialog(
     onDismiss: () -> Unit,
     playbackSpeed: Float,
-    screenBrightness: Float,
-    onBrightnessDown: () -> Unit,
-    onBrightnessUp: () -> Unit,
-    onBrightnessChange: (Float) -> Unit,
     onSpeedChange: (Float) -> Unit,
-    autoFrameRate: Boolean,
-    onAutoFrameRateChange: () -> Unit,
-    skipSilence: Boolean,
-    onSkipSilenceChange: () -> Unit,
     volumeBoost: Int,
     onVolumeBoostChange: (Int) -> Unit,
     repeatMode: Int,
-    onRepeatModeChange: () -> Unit,
-    tunneling: Boolean,
-    onTunnelingChange: () -> Unit
+    onRepeatModeChange: () -> Unit
 ) {
     BackHandler(onBack = onDismiss)
     val dialogFocusRequester = remember { FocusRequester() }
@@ -1108,23 +1090,23 @@ private fun TvPlayerSettingsDialog(
             }
             .focusable()
             .clickable(onClick = { }),
-        contentAlignment = Alignment.CenterEnd
+        contentAlignment = Alignment.Center
     ) {
         Card(
             modifier = Modifier
-                // Bug 4 fix: reduced settings popup size
-                .fillMaxHeight(0.60f)
-                .widthIn(min = 280.dp, max = 340.dp)
-                .padding(end = 48.dp),
-            shape = RoundedCornerShape(12.dp),
+                .width(460.dp)
+                .wrapContentHeight()
+                .padding(16.dp),
+            shape = RoundedCornerShape(16.dp),
             colors = CardDefaults.cardColors(containerColor = TvPanel),
             border = BorderStroke(1.dp, Color.White.copy(alpha = 0.12f))
         ) {
             LazyColumn(
                 modifier = Modifier
-                    .fillMaxSize()
-                    .padding(12.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp)
+                    .fillMaxWidth()
+                    .heightIn(max = 480.dp)
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 item {
                     Text(
@@ -1134,43 +1116,13 @@ private fun TvPlayerSettingsDialog(
                         fontWeight = FontWeight.ExtraBold
                     )
                     Spacer(modifier = Modifier.height(8.dp))
-                }
-
-                item {
-                    DialogSectionHeader(icon = Icons.Rounded.Brightness6, title = "Screen Brightness")
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Slider(
-                        value = screenBrightness,
-                        onValueChange = onBrightnessChange,
-                        valueRange = 0.05f..1f,
-                        colors = SliderDefaults.colors(
-                            thumbColor = TvAccent,
-                            activeTrackColor = TvAccent,
-                            inactiveTrackColor = Color.White.copy(alpha = 0.18f)
-                        )
+                    Spacer(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(1.dp)
+                            .background(Color.White.copy(alpha = 0.15f))
                     )
-                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        TvSettingsChip(
-                            label = "Down",
-                            selected = false,
-                            focusRequester = firstSettingFocusRequester,
-                            onClick = onBrightnessDown
-                        )
-                        TvSettingsChip(
-                            label = "Up",
-                            selected = false,
-                            onClick = onBrightnessUp
-                        )
-                        Text(
-                            text = "${(screenBrightness * 100).toInt()}%",
-                            style = MaterialTheme.typography.titleMedium,
-                            color = Color.White,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier
-                                .heightIn(min = 52.dp)
-                                .padding(horizontal = 8.dp, vertical = 14.dp)
-                        )
-                    }
+                    Spacer(modifier = Modifier.height(8.dp))
                 }
 
                 item {
@@ -1178,10 +1130,11 @@ private fun TvPlayerSettingsDialog(
                     DialogSectionHeader(icon = Icons.Rounded.Speed, title = "Playback Speed")
                     Spacer(modifier = Modifier.height(8.dp))
                     TvOptionFlow {
-                        playbackSpeedOptions.forEach { speed ->
+                        playbackSpeedOptions.forEachIndexed { index, speed ->
                             TvSettingsChip(
                                 label = if (speed == 1.0f) "Normal" else "${speed}x",
                                 selected = playbackSpeed == speed,
+                                focusRequester = firstSettingFocusRequester.takeIf { index == 0 },
                                 onClick = { onSpeedChange(speed) }
                             )
                         }
@@ -1236,78 +1189,12 @@ private fun TvPlayerSettingsDialog(
                             selected = volumeBoost == 6,
                             onClick = { onVolumeBoostChange(6) }
                         )
-                        TvSettingsChip(
-                            label = "+20 dB",
-                            selected = volumeBoost == 10,
-                            onClick = { onVolumeBoostChange(10) }
-                        )
                     }
                 }
 
                 item {
-                    Spacer(modifier = Modifier.height(8.dp))
-                    DialogSectionHeader(icon = Icons.Rounded.Hearing, title = "Skip Silence")
-                    Spacer(modifier = Modifier.height(8.dp))
-                    TvOptionFlow {
-                        TvSettingsChip(
-                            label = "Enabled",
-                            selected = skipSilence,
-                            onClick = { if (!skipSilence) onSkipSilenceChange() }
-                        )
-                        TvSettingsChip(
-                            label = "Disabled",
-                            selected = !skipSilence,
-                            onClick = { if (skipSilence) onSkipSilenceChange() }
-                        )
-                    }
-                }
-
-                item {
-                    Spacer(modifier = Modifier.height(8.dp))
-                    DialogSectionHeader(icon = Icons.Rounded.FlashOn, title = "Tunneled Playback")
-                    Spacer(modifier = Modifier.height(8.dp))
-                    TvOptionFlow {
-                        TvSettingsChip(
-                            label = "Enabled",
-                            selected = tunneling,
-                            onClick = { if (!tunneling) onTunnelingChange() }
-                        )
-                        TvSettingsChip(
-                            label = "Disabled",
-                            selected = !tunneling,
-                            onClick = { if (tunneling) onTunnelingChange() }
-                        )
-                    }
-                }
-
-                item {
-                    Spacer(modifier = Modifier.height(8.dp))
-                    DialogSectionHeader(icon = Icons.Rounded.Tv, title = "Auto Frame Rate")
-                    Spacer(modifier = Modifier.height(8.dp))
-                    TvOptionFlow {
-                        TvSettingsChip(
-                            label = "Enabled",
-                            selected = autoFrameRate,
-                            onClick = { if (!autoFrameRate) onAutoFrameRateChange() }
-                        )
-                        TvSettingsChip(
-                            label = "Disabled",
-                            selected = !autoFrameRate,
-                            onClick = { if (autoFrameRate) onAutoFrameRateChange() }
-                        )
-                    }
-                }
-
-                item {
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Button(
-                        onClick = onDismiss,
-                        colors = ButtonDefaults.buttonColors(containerColor = TvAccent),
-                        modifier = Modifier.fillMaxWidth(),
-                        contentPadding = PaddingValues(vertical = 9.dp)
-                    ) {
-                        Text("Close", style = MaterialTheme.typography.titleMedium)
-                    }
+                    Spacer(modifier = Modifier.height(10.dp))
+                    TvCloseButton(onClick = onDismiss)
                 }
             }
         }
@@ -1338,6 +1225,49 @@ private fun DialogHint(text: String) {
     )
 }
 
+@Composable
+private fun TvCloseButton(onClick: () -> Unit) {
+    var isFocused by remember { mutableStateOf(false) }
+    val scale by animateFloatAsState(
+        targetValue = if (isFocused) 1.03f else 1f,
+        animationSpec = tween(120),
+        label = "tv-close-scale"
+    )
+    Button(
+        onClick = onClick,
+        colors = ButtonDefaults.buttonColors(
+            containerColor = if (isFocused) TvAccent.copy(alpha = 0.9f) else TvAccent,
+            contentColor = Color.White
+        ),
+        border = BorderStroke(
+            width = if (isFocused) 3.dp else 1.dp,
+            color = if (isFocused) Color.White else Color.White.copy(alpha = 0.12f)
+        ),
+        shape = RoundedCornerShape(14.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            }
+            .onFocusChanged { isFocused = it.isFocused }
+            .onPreviewKeyEvent { event ->
+                if (event.key.isTvSelectKey()) {
+                    if (event.type == KeyEventType.KeyDown && event.nativeKeyEvent.repeatCount == 0) {
+                        onClick()
+                    }
+                    true
+                } else {
+                    false
+                }
+            }
+            .focusable(),
+        contentPadding = PaddingValues(vertical = 12.dp)
+    ) {
+        Text("Close", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+    }
+}
+
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun TvOptionFlow(content: @Composable () -> Unit) {
@@ -1359,6 +1289,11 @@ private fun TvSettingsChip(
 ) {
     var isFocused by remember { mutableStateOf(false) }
     val requesterModifier = focusRequester?.let { Modifier.focusRequester(it) } ?: Modifier
+    val scale by animateFloatAsState(
+        targetValue = if (isFocused) 1.04f else 1f,
+        animationSpec = tween(120),
+        label = "tv-chip-scale"
+    )
 
     FilterChip(
         selected = selected,
@@ -1380,7 +1315,7 @@ private fun TvSettingsChip(
             enabled = true,
             selected = selected,
             borderColor = if (isFocused) Color.White else Color.White.copy(alpha = 0.12f),
-            selectedBorderColor = Color.White.copy(alpha = 0.22f),
+            selectedBorderColor = if (isFocused) Color.White else Color.White.copy(alpha = 0.22f),
             borderWidth = if (isFocused) 3.dp else 1.dp,
             selectedBorderWidth = if (isFocused) 3.dp else 1.dp
         ),
@@ -1388,10 +1323,14 @@ private fun TvSettingsChip(
         modifier = Modifier
             .heightIn(min = 52.dp)
             .then(requesterModifier)
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            }
             .onFocusChanged { isFocused = it.isFocused }
             .onPreviewKeyEvent { event ->
-                if (event.isTvSelectDown()) {
-                    if (event.isInitialTvSelectDown()) {
+                if (event.key.isTvSelectKey()) {
+                    if (event.type == KeyEventType.KeyDown && event.nativeKeyEvent.repeatCount == 0) {
                         onClick()
                     }
                     true
@@ -1420,14 +1359,14 @@ private fun TvTrackOption(
 
     Surface(
         color = when {
-            selected -> TvAccent
-            isFocused -> TvPanelLight
+            isFocused -> Color.White
+            selected -> Color.Transparent
             else -> Color.White.copy(alpha = 0.06f)
         },
         shape = RoundedCornerShape(14.dp),
         border = BorderStroke(
-            width = if (isFocused) 3.dp else 1.dp,
-            color = if (isFocused) Color.White else Color.White.copy(alpha = 0.1f)
+            width = if (isFocused) 3.dp else if (selected) 2.dp else 1.dp,
+            color = if (isFocused) TvAccent else if (selected) TvAccent else Color.White.copy(alpha = 0.12f)
         ),
         modifier = Modifier
             .fillMaxWidth()
@@ -1439,8 +1378,8 @@ private fun TvTrackOption(
             }
             .onFocusChanged { isFocused = it.isFocused }
             .onPreviewKeyEvent { event ->
-                if (event.isTvSelectDown()) {
-                    if (event.isInitialTvSelectDown()) {
+                if (event.key.isTvSelectKey()) {
+                    if (event.type == KeyEventType.KeyDown && event.nativeKeyEvent.repeatCount == 0) {
                         onClick()
                     }
                     true
@@ -1453,31 +1392,29 @@ private fun TvTrackOption(
     ) {
         Row(
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 11.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
+            verticalAlignment = Alignment.CenterVertically
         ) {
+            Icon(
+                imageVector = if (selected) Icons.Rounded.RadioButtonChecked else Icons.Rounded.RadioButtonUnchecked,
+                contentDescription = if (selected) "Selected" else "Not Selected",
+                tint = if (isFocused) TvPanel else if (selected) TvAccent else Color.White.copy(alpha = 0.5f),
+                modifier = Modifier.size(24.dp)
+            )
+            Spacer(modifier = Modifier.width(12.dp))
             Text(
                 text = label,
                 style = MaterialTheme.typography.titleLarge,
-                color = Color.White,
+                color = if (isFocused) TvPanel else Color.White,
                 fontWeight = if (selected) FontWeight.ExtraBold else FontWeight.SemiBold,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f)
             )
-            if (selected) {
-                Text(
-                    text = "Selected",
-                    style = MaterialTheme.typography.titleSmall,
-                    color = Color.White.copy(alpha = 0.9f),
-                    modifier = Modifier.padding(start = 18.dp)
-                )
-            }
         }
     }
 }
 
-private val playbackSpeedOptions = listOf(0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 2.0f, 3.0f)
+private val playbackSpeedOptions = listOf(0.75f, 1.0f, 1.25f, 1.5f)
 
 private val resizeModeOptions: List<Pair<Int, String>> = listOf(
     AspectRatioFrameLayout.RESIZE_MODE_FIXED_WIDTH to "Original",

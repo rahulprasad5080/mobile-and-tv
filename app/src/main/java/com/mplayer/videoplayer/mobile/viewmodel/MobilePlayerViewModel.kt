@@ -280,8 +280,9 @@ class MobilePlayerViewModel(application: Application) : AndroidViewModel(applica
     }
 
     fun setPlaybackSpeed(speed: Float) {
-        _playbackSpeed.value = speed
-        playerManager.getPlayer()?.setPlaybackSpeed(speed)
+        val coerced = speed.coerceIn(0.75f, 1.5f)
+        _playbackSpeed.value = coerced
+        playerManager.getPlayer()?.setPlaybackSpeed(coerced)
     }
 
     fun setResizeMode(mode: Int) {
@@ -356,7 +357,7 @@ class MobilePlayerViewModel(application: Application) : AndroidViewModel(applica
     }
 
     fun setVolumeBoost(level: Int) {
-        val bounded = level.coerceIn(0, 10)
+        val bounded = level.coerceIn(0, 6)
         _volumeBoost.value = bounded
         playerManager.setVolumeBoost(bounded)
         settingsPrefs.edit().putInt("volume_boost", bounded).apply()

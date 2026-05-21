@@ -1156,7 +1156,7 @@ fun PlaybackSection(currentSpeed: Float, onSpeedChange: (Float) -> Unit) {
         Slider(
             value = currentSpeed,
             onValueChange = { onSpeedChange(it) },
-            valueRange = 0.25f..3.0f,
+            valueRange = 0.75f..1.5f,
             colors = SliderDefaults.colors(
                 thumbColor = PrimaryAccent,
                 activeTrackColor = PrimaryAccent,
@@ -1638,8 +1638,7 @@ fun AdvancedPlaybackSection(
             0 to "Off",
             1 to "+2 dB",
             3 to "+6 dB",
-            6 to "+12 dB",
-            10 to "+20 dB"
+            6 to "+12 dB"
         ).forEach { (level, label) ->
             SettingsChip(
                 selected = volumeBoost == level,
