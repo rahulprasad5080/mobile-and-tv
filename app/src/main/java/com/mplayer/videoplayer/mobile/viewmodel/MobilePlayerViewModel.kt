@@ -5,8 +5,10 @@ import android.content.Context
 import android.content.pm.ActivityInfo
 import android.media.AudioManager
 import android.media.MediaMetadataRetriever
+import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.media3.common.Player
 import com.mplayer.videoplayer.core.model.AudioTrackInfo
 import com.mplayer.videoplayer.core.model.SubtitleTrackInfo
 import com.mplayer.videoplayer.core.model.VideoMediaItem
@@ -32,6 +34,17 @@ class MobilePlayerViewModel(application: Application) : AndroidViewModel(applica
     
     private var currentVideo: VideoMediaItem? = null
     private var playlist: List<VideoMediaItem> = emptyList()
+    
+    private val settingsPrefs = application.getSharedPreferences("player_settings", Context.MODE_PRIVATE)
+
+    private val _skipSilence = MutableStateFlow(settingsPrefs.getBoolean("skip_silence", false))
+    val skipSilence: StateFlow<Boolean> = _skipSilence.asStateFlow()
+
+    private val _volumeBoost = MutableStateFlow(settingsPrefs.getInt("volume_boost", 0))
+    val volumeBoost: StateFlow<Int> = _volumeBoost.asStateFlow()
+
+    private val _repeatMode = MutableStateFlow(settingsPrefs.getInt("repeat_mode", Player.REPEAT_MODE_OFF))
+    val repeatMode: StateFlow<Int> = _repeatMode.asStateFlow()
     
     private val _isPlaying = MutableStateFlow(true)
     val isPlaying: StateFlow<Boolean> = _isPlaying.asStateFlow()
@@ -86,6 +99,11 @@ class MobilePlayerViewModel(application: Application) : AndroidViewModel(applica
     private var hasManualOrientationOverride = false
 
     init {
+        // Load initial player settings
+        playerManager.setSkipSilence(_skipSilence.value)
+        playerManager.setVolumeBoost(_volumeBoost.value)
+        playerManager.setRepeatMode(_repeatMode.value)
+
         playerManager.initializePlayer()
         startProgressUpdate()
         
@@ -329,6 +347,42 @@ class MobilePlayerViewModel(application: Application) : AndroidViewModel(applica
     fun getSubtitleTracks() = playerManager.getSubtitleTracks()
     fun selectAudioTrack(id: String) = playerManager.selectAudioTrack(id)
     fun selectSubtitleTrack(id: String?) = playerManager.selectSubtitleTrack(id)
+
+    fun toggleSkipSilence() {
+        val newVal = !_skipSilence.value
+        _skipSilence.value = newVal
+        playerManager.setSkipSilence(newVal)
+        settingsPrefs.edit().putBoolean("skip_silence", newVal).apply()
+    }
+
+    fun setVolumeBoost(level: Int) {
+        val bounded = level.coerceIn(0, 10)
+        _volumeBoost.value = bounded
+        playerManager.setVolumeBoost(bounded)
+        settingsPrefs.edit().putInt("volume_boost", bounded).apply()
+    }
+
+    fun toggleRepeatMode() {
+        val nextMode = when (_repeatMode.value) {
+            Player.REPEAT_MODE_OFF -> Player.REPEAT_MODE_ONE
+            Player.REPEAT_MODE_ONE -> Player.REPEAT_MODE_ALL
+            else -> Player.REPEAT_MODE_OFF
+        }
+        _repeatMode.value = nextMode
+        playerManager.setRepeatMode(nextMode)
+        settingsPrefs.edit().putInt("repeat_mode", nextMode).apply()
+    }
+
+    fun addExternalSubtitle(uri: Uri, mimeType: String, label: String) {
+        try {
+            val contentResolver = getApplication<Application>().contentResolver
+            val takeFlags = android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION
+            contentResolver.takePersistableUriPermission(uri, takeFlags)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+        playerManager.addExternalSubtitle(uri, mimeType, label)
+    }
 
     fun setPipMode(inPipMode: Boolean) {
         _isInPipMode.value = inPipMode

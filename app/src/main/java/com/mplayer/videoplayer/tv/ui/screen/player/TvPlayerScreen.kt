@@ -52,6 +52,12 @@ import androidx.compose.material.icons.rounded.SkipNext
 import androidx.compose.material.icons.rounded.SkipPrevious
 import androidx.compose.material.icons.rounded.Speed
 import androidx.compose.material.icons.rounded.Subtitles
+import androidx.compose.material.icons.rounded.Hearing
+import androidx.compose.material.icons.rounded.Tv
+import androidx.compose.material.icons.rounded.VolumeUp
+import androidx.compose.material.icons.rounded.Repeat
+import androidx.compose.material.icons.rounded.FlashOn
+import com.mplayer.videoplayer.tv.util.FrameRateHelper
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Button
@@ -133,6 +139,13 @@ fun TvPlayerScreen(
     val subtitleTracks by viewModel.subtitleTracks.collectAsState()
     val playbackState by viewModel.playerManager.playbackState.collectAsState()
     val playbackErrorMessage = (playbackState as? PlayerManager.PlaybackState.Error)?.message
+    
+    val currentVideo = viewModel.currentVideoVal
+    val autoFrameRate by viewModel.autoFrameRate.collectAsState()
+    val skipSilence by viewModel.skipSilence.collectAsState()
+    val volumeBoost by viewModel.volumeBoost.collectAsState()
+    val repeatMode by viewModel.repeatMode.collectAsState()
+    val tunneling by viewModel.tunneling.collectAsState()
     val context = LocalContext.current
     var showControls by remember { mutableStateOf(true) }
     var showSettings by remember { mutableStateOf(false) }
@@ -200,7 +213,24 @@ fun TvPlayerScreen(
 
     DisposableEffect(Unit) {
         onDispose {
+            FrameRateHelper.abort()
             viewModel.stopPlayback()
+        }
+    }
+
+    LaunchedEffect(currentVideo, autoFrameRate) {
+        val video = currentVideo
+        if (video != null && autoFrameRate) {
+            val playerInstance = viewModel.playerManager.getPlayer()
+            val wasPlaying = playerInstance?.playWhenReady ?: true
+            playerInstance?.playWhenReady = false
+            activity?.let { act ->
+                FrameRateHelper.switchFrameRate(act, video.uri) {
+                    if (wasPlaying) {
+                        playerInstance?.playWhenReady = true
+                    }
+                }
+            }
         }
     }
 
@@ -558,6 +588,31 @@ fun TvPlayerScreen(
             },
             onSpeedChange = {
                 viewModel.setPlaybackSpeed(it)
+                showControls = true
+            },
+            autoFrameRate = autoFrameRate,
+            onAutoFrameRateChange = {
+                viewModel.toggleAutoFrameRate()
+                showControls = true
+            },
+            skipSilence = skipSilence,
+            onSkipSilenceChange = {
+                viewModel.toggleSkipSilence()
+                showControls = true
+            },
+            volumeBoost = volumeBoost,
+            onVolumeBoostChange = {
+                viewModel.setVolumeBoost(it)
+                showControls = true
+            },
+            repeatMode = repeatMode,
+            onRepeatModeChange = {
+                viewModel.toggleRepeatMode()
+                showControls = true
+            },
+            tunneling = tunneling,
+            onTunnelingChange = {
+                viewModel.toggleTunneling()
                 showControls = true
             }
         )
@@ -1014,7 +1069,17 @@ private fun TvPlayerSettingsDialog(
     onBrightnessDown: () -> Unit,
     onBrightnessUp: () -> Unit,
     onBrightnessChange: (Float) -> Unit,
-    onSpeedChange: (Float) -> Unit
+    onSpeedChange: (Float) -> Unit,
+    autoFrameRate: Boolean,
+    onAutoFrameRateChange: () -> Unit,
+    skipSilence: Boolean,
+    onSkipSilenceChange: () -> Unit,
+    volumeBoost: Int,
+    onVolumeBoostChange: (Int) -> Unit,
+    repeatMode: Int,
+    onRepeatModeChange: () -> Unit,
+    tunneling: Boolean,
+    onTunnelingChange: () -> Unit
 ) {
     BackHandler(onBack = onDismiss)
     val dialogFocusRequester = remember { FocusRequester() }
@@ -1120,6 +1185,116 @@ private fun TvPlayerSettingsDialog(
                                 onClick = { onSpeedChange(speed) }
                             )
                         }
+                    }
+                }
+
+                item {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    DialogSectionHeader(icon = Icons.Rounded.Repeat, title = "Repeat Mode")
+                    Spacer(modifier = Modifier.height(8.dp))
+                    TvOptionFlow {
+                        TvSettingsChip(
+                            label = "Off",
+                            selected = repeatMode == 0,
+                            onClick = { if (repeatMode != 0) onRepeatModeChange() }
+                        )
+                        TvSettingsChip(
+                            label = "One",
+                            selected = repeatMode == 1,
+                            onClick = { if (repeatMode != 1) onRepeatModeChange() }
+                        )
+                        TvSettingsChip(
+                            label = "All",
+                            selected = repeatMode == 2,
+                            onClick = { if (repeatMode != 2) onRepeatModeChange() }
+                        )
+                    }
+                }
+
+                item {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    DialogSectionHeader(icon = Icons.Rounded.VolumeUp, title = "Volume Boost (Loudness)")
+                    Spacer(modifier = Modifier.height(8.dp))
+                    TvOptionFlow {
+                        TvSettingsChip(
+                            label = "Off",
+                            selected = volumeBoost == 0,
+                            onClick = { onVolumeBoostChange(0) }
+                        )
+                        TvSettingsChip(
+                            label = "+2 dB",
+                            selected = volumeBoost == 1,
+                            onClick = { onVolumeBoostChange(1) }
+                        )
+                        TvSettingsChip(
+                            label = "+6 dB",
+                            selected = volumeBoost == 3,
+                            onClick = { onVolumeBoostChange(3) }
+                        )
+                        TvSettingsChip(
+                            label = "+12 dB",
+                            selected = volumeBoost == 6,
+                            onClick = { onVolumeBoostChange(6) }
+                        )
+                        TvSettingsChip(
+                            label = "+20 dB",
+                            selected = volumeBoost == 10,
+                            onClick = { onVolumeBoostChange(10) }
+                        )
+                    }
+                }
+
+                item {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    DialogSectionHeader(icon = Icons.Rounded.Hearing, title = "Skip Silence")
+                    Spacer(modifier = Modifier.height(8.dp))
+                    TvOptionFlow {
+                        TvSettingsChip(
+                            label = "Enabled",
+                            selected = skipSilence,
+                            onClick = { if (!skipSilence) onSkipSilenceChange() }
+                        )
+                        TvSettingsChip(
+                            label = "Disabled",
+                            selected = !skipSilence,
+                            onClick = { if (skipSilence) onSkipSilenceChange() }
+                        )
+                    }
+                }
+
+                item {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    DialogSectionHeader(icon = Icons.Rounded.FlashOn, title = "Tunneled Playback")
+                    Spacer(modifier = Modifier.height(8.dp))
+                    TvOptionFlow {
+                        TvSettingsChip(
+                            label = "Enabled",
+                            selected = tunneling,
+                            onClick = { if (!tunneling) onTunnelingChange() }
+                        )
+                        TvSettingsChip(
+                            label = "Disabled",
+                            selected = !tunneling,
+                            onClick = { if (tunneling) onTunnelingChange() }
+                        )
+                    }
+                }
+
+                item {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    DialogSectionHeader(icon = Icons.Rounded.Tv, title = "Auto Frame Rate")
+                    Spacer(modifier = Modifier.height(8.dp))
+                    TvOptionFlow {
+                        TvSettingsChip(
+                            label = "Enabled",
+                            selected = autoFrameRate,
+                            onClick = { if (!autoFrameRate) onAutoFrameRateChange() }
+                        )
+                        TvSettingsChip(
+                            label = "Disabled",
+                            selected = !autoFrameRate,
+                            onClick = { if (autoFrameRate) onAutoFrameRateChange() }
+                        )
                     }
                 }
 

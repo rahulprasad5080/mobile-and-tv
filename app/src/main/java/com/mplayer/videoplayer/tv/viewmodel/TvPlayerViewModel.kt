@@ -16,6 +16,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import androidx.media3.common.Player
 
 class TvPlayerViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -23,9 +24,27 @@ class TvPlayerViewModel(application: Application) : AndroidViewModel(application
     private val audioManager = application.getSystemService(Context.AUDIO_SERVICE) as AudioManager
     private val progressRepository = PlaybackProgressRepository(application)
     private var currentVideo: VideoMediaItem? = null
+    val currentVideoVal: VideoMediaItem? get() = currentVideo
     private var playlist: List<VideoMediaItem> = emptyList()
     private var releaseJob: kotlinx.coroutines.Job? = null
     private var volumeBeforeMute = 0.5f
+
+    private val settingsPrefs = application.getSharedPreferences("player_settings", Context.MODE_PRIVATE)
+
+    private val _autoFrameRate = MutableStateFlow(settingsPrefs.getBoolean("auto_frame_rate", false))
+    val autoFrameRate: StateFlow<Boolean> = _autoFrameRate.asStateFlow()
+
+    private val _skipSilence = MutableStateFlow(settingsPrefs.getBoolean("skip_silence", false))
+    val skipSilence: StateFlow<Boolean> = _skipSilence.asStateFlow()
+
+    private val _volumeBoost = MutableStateFlow(settingsPrefs.getInt("volume_boost", 0))
+    val volumeBoost: StateFlow<Int> = _volumeBoost.asStateFlow()
+
+    private val _repeatMode = MutableStateFlow(settingsPrefs.getInt("repeat_mode", Player.REPEAT_MODE_OFF))
+    val repeatMode: StateFlow<Int> = _repeatMode.asStateFlow()
+
+    private val _tunneling = MutableStateFlow(settingsPrefs.getBoolean("tunneling", false))
+    val tunneling: StateFlow<Boolean> = _tunneling.asStateFlow()
 
     private val _isPlaying = MutableStateFlow(true)
     val isPlaying: StateFlow<Boolean> = _isPlaying.asStateFlow()
@@ -58,6 +77,12 @@ class TvPlayerViewModel(application: Application) : AndroidViewModel(application
     val subtitleTracks: StateFlow<List<SubtitleTrackInfo>> = _subtitleTracks.asStateFlow()
 
     init {
+        // Load initial player settings
+        playerManager.setSkipSilence(_skipSilence.value)
+        playerManager.setVolumeBoost(_volumeBoost.value)
+        playerManager.setRepeatMode(_repeatMode.value)
+        playerManager.setTunnelingEnabled(_tunneling.value)
+
         playerManager.initializePlayer()
         startProgressUpdate()
         viewModelScope.launch {
@@ -73,6 +98,44 @@ class TvPlayerViewModel(application: Application) : AndroidViewModel(application
             _volume.value = currentVolume / maxVolume
             _isMuted.value = currentVolume == 0f
         }
+    }
+
+    fun toggleAutoFrameRate() {
+        val newVal = !_autoFrameRate.value
+        _autoFrameRate.value = newVal
+        settingsPrefs.edit().putBoolean("auto_frame_rate", newVal).apply()
+    }
+
+    fun toggleSkipSilence() {
+        val newVal = !_skipSilence.value
+        _skipSilence.value = newVal
+        playerManager.setSkipSilence(newVal)
+        settingsPrefs.edit().putBoolean("skip_silence", newVal).apply()
+    }
+
+    fun setVolumeBoost(level: Int) {
+        val bounded = level.coerceIn(0, 10)
+        _volumeBoost.value = bounded
+        playerManager.setVolumeBoost(bounded)
+        settingsPrefs.edit().putInt("volume_boost", bounded).apply()
+    }
+
+    fun toggleRepeatMode() {
+        val nextMode = when (_repeatMode.value) {
+            Player.REPEAT_MODE_OFF -> Player.REPEAT_MODE_ONE
+            Player.REPEAT_MODE_ONE -> Player.REPEAT_MODE_ALL
+            else -> Player.REPEAT_MODE_OFF
+        }
+        _repeatMode.value = nextMode
+        playerManager.setRepeatMode(nextMode)
+        settingsPrefs.edit().putInt("repeat_mode", nextMode).apply()
+    }
+
+    fun toggleTunneling() {
+        val newVal = !_tunneling.value
+        _tunneling.value = newVal
+        playerManager.setTunnelingEnabled(newVal)
+        settingsPrefs.edit().putBoolean("tunneling", newVal).apply()
     }
 
     private fun startProgressUpdate() {

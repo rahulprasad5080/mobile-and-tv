@@ -1,6 +1,8 @@
 package com.mplayer.videoplayer.core.player
 
 import android.content.Context
+import android.media.audiofx.LoudnessEnhancer
+import android.net.Uri
 import android.os.Build
 import kotlin.OptIn
 import androidx.media3.common.AudioAttributes
@@ -19,8 +21,10 @@ import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 import com.mplayer.videoplayer.core.model.AudioTrackInfo
+import com.mplayer.videoplayer.core.model.SubtitleTrack
 import com.mplayer.videoplayer.core.model.SubtitleTrackInfo
 import com.mplayer.videoplayer.core.model.VideoMediaItem
+import java.io.File
 import java.util.Locale
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -37,6 +41,15 @@ class PlayerManager(private val context: Context) {
         // Persist selected track IDs across play/pause — Bug 3 fix
         private var selectedAudioTrackId: String? = null
         private var selectedSubtitleTrackId: String? = null
+        
+        // Advanced features state
+        private var currentVideoMediaItem: VideoMediaItem? = null
+        private var loudnessEnhancer: LoudnessEnhancer? = null
+        private var boostLevel: Int = 0
+        private var isTunnelingEnabled = false
+        private var isSkipSilenceEnabled = false
+        private var repeatModeVal = Player.REPEAT_MODE_OFF
+        private val externalSubtitles = mutableListOf<SubtitleTrack>()
     }
 
     private val trackSelector = DefaultTrackSelector(context)
@@ -46,7 +59,6 @@ class PlayerManager(private val context: Context) {
 
     private val _currentTracks = MutableStateFlow<Tracks?>(null)
     val currentTracks: StateFlow<Tracks?> = _currentTracks.asStateFlow()
-
     sealed class PlaybackState {
         object Idle : PlaybackState()
         object Buffering : PlaybackState()
@@ -62,7 +74,7 @@ class PlayerManager(private val context: Context) {
             .setExceedVideoConstraintsIfNecessary(true)
             .setExceedAudioConstraintsIfNecessary(true)
             .setExceedRendererCapabilitiesIfNecessary(true)
-            .setTunnelingEnabled(false)
+            .setTunnelingEnabled(isTunnelingEnabled)
             // Bug 6 fix: explicitly enable subtitle/text tracks (were disabled by default)
             .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
             .build()
@@ -94,6 +106,8 @@ class PlayerManager(private val context: Context) {
             )
             .build().apply {
                 playWhenReady = true
+                setSkipSilenceEnabled(isSkipSilenceEnabled)
+                repeatMode = repeatModeVal
                 // TV devices don't need to pause on headphone disconnect
                 setHandleAudioBecomingNoisy(false)
                 addListener(object : Player.Listener {
@@ -113,8 +127,13 @@ class PlayerManager(private val context: Context) {
                     override fun onTracksChanged(tracks: Tracks) {
                         _currentTracks.value = tracks
                     }
+
+                    override fun onAudioSessionIdChanged(audioSessionId: Int) {
+                        applyLoudnessEnhancer()
+                    }
                 })
             }
+        applyLoudnessEnhancer()
     }
 
     fun getPlayer(): Player? = instance
@@ -131,6 +150,13 @@ class PlayerManager(private val context: Context) {
             return
         }
 
+        if (currentMediaId != item.id) {
+            externalSubtitles.clear()
+        }
+        currentVideoMediaItem = item
+        val localSubs = findLocalSubtitles(item.filePath)
+        val allSubs = (item.subtitles + localSubs + externalSubtitles).distinctBy { it.uri.toString() }
+
         val mediaItem = MediaItem.Builder()
             .setMediaId(item.id)
             .setUri(item.uri)
@@ -141,7 +167,7 @@ class PlayerManager(private val context: Context) {
                     .build()
             )
             .setSubtitleConfigurations(
-                item.subtitles.map {
+                allSubs.map {
                     MediaItem.SubtitleConfiguration.Builder(it.uri)
                         .setMimeType(it.mimeType)
                         .setLanguage(it.language)
@@ -164,6 +190,13 @@ class PlayerManager(private val context: Context) {
         val player = instance ?: return
         if (currentMediaId == item.id && player.mediaItemCount > 0) return
 
+        if (currentMediaId != item.id) {
+            externalSubtitles.clear()
+        }
+        currentVideoMediaItem = item
+        val localSubs = findLocalSubtitles(item.filePath)
+        val allSubs = (item.subtitles + localSubs + externalSubtitles).distinctBy { it.uri.toString() }
+
         val mediaItem = MediaItem.Builder()
             .setMediaId(item.id)
             .setUri(item.uri)
@@ -174,7 +207,7 @@ class PlayerManager(private val context: Context) {
                     .build()
             )
             .setSubtitleConfigurations(
-                item.subtitles.map {
+                allSubs.map {
                     MediaItem.SubtitleConfiguration.Builder(it.uri)
                         .setMimeType(it.mimeType)
                         .setLanguage(it.language)
@@ -239,13 +272,168 @@ class PlayerManager(private val context: Context) {
         player.seekTo(target)
     }
 
+    fun findLocalSubtitles(videoPath: String?): List<SubtitleTrack> {
+        if (videoPath.isNullOrBlank()) return emptyList()
+        val videoFile = File(videoPath)
+        val parentDir = videoFile.parentFile ?: return emptyList()
+        if (!parentDir.exists() || !parentDir.isDirectory) return emptyList()
+
+        val videoName = videoFile.nameWithoutExtension.lowercase(Locale.US)
+        val subtitleExtensions = listOf("srt", "vtt", "ssa", "ass", "ttml")
+
+        val list = mutableListOf<SubtitleTrack>()
+        try {
+            val files = parentDir.listFiles() ?: return emptyList()
+            for (file in files) {
+                if (file.isFile) {
+                    val name = file.name.lowercase(Locale.US)
+                    val ext = file.extension.lowercase(Locale.US)
+                    if (ext in subtitleExtensions) {
+                        if (name.startsWith(videoName)) {
+                            val mimeType = when (ext) {
+                                "srt" -> "application/x-subrip"
+                                "vtt" -> "text/vtt"
+                                "ssa", "ass" -> "text/x-ssa"
+                                "ttml" -> "application/ttml+xml"
+                                else -> "text/vtt"
+                            }
+                            val suffix = file.nameWithoutExtension.substringAfter(videoFile.nameWithoutExtension, "")
+                            val label = if (suffix.startsWith(".")) {
+                                val langCode = suffix.substring(1)
+                                val loc = Locale.forLanguageTag(langCode)
+                                val display = loc.getDisplayLanguage(Locale.ENGLISH)
+                                if (display.isNotBlank() && display != langCode) display else langCode.uppercase(Locale.US)
+                            } else {
+                                "External (${ext.uppercase(Locale.US)})"
+                            }
+                            list.add(
+                                SubtitleTrack(
+                                    uri = Uri.fromFile(file),
+                                    mimeType = mimeType,
+                                    language = if (suffix.startsWith(".")) suffix.substring(1) else null,
+                                    label = label
+                                )
+                            )
+                        }
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+        return list
+    }
+
+    fun addExternalSubtitle(uri: Uri, mimeType: String, label: String) {
+        val player = instance ?: return
+        val currentPosition = player.currentPosition
+        val currentItem = currentVideoMediaItem ?: return
+
+        val newSub = SubtitleTrack(
+            uri = uri,
+            mimeType = mimeType,
+            label = label
+        )
+        externalSubtitles.add(newSub)
+
+        val localSubs = findLocalSubtitles(currentItem.filePath)
+        val allSubs = (currentItem.subtitles + localSubs + externalSubtitles).distinctBy { it.uri.toString() }
+
+        val mediaItem = MediaItem.Builder()
+            .setMediaId(currentItem.id)
+            .setUri(currentItem.uri)
+            .setMimeType(currentItem.mimeType.forPlayback())
+            .setMediaMetadata(
+                MediaMetadata.Builder()
+                    .setTitle(currentItem.title)
+                    .build()
+            )
+            .setSubtitleConfigurations(
+                allSubs.map {
+                    MediaItem.SubtitleConfiguration.Builder(it.uri)
+                        .setMimeType(it.mimeType)
+                        .setLanguage(it.language)
+                        .setLabel(it.label)
+                        .setSelectionFlags(C.SELECTION_FLAG_DEFAULT)
+                        .build()
+                }
+            )
+            .build()
+
+        player.setMediaItem(mediaItem, currentPosition)
+        player.prepare()
+        player.play()
+    }
+
+    fun applyLoudnessEnhancer() {
+        val player = instance ?: return
+        try {
+            val audioSessionId = player.audioSessionId
+            if (audioSessionId != C.AUDIO_SESSION_ID_UNSET) {
+                if (loudnessEnhancer == null || loudnessEnhancer?.id != audioSessionId) {
+                    loudnessEnhancer?.release()
+                    loudnessEnhancer = LoudnessEnhancer(audioSessionId)
+                }
+                loudnessEnhancer?.apply {
+                    setTargetGain(boostLevel * 200)
+                    setEnabled(boostLevel > 0)
+                }
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    fun setVolumeBoost(level: Int) {
+        boostLevel = level.coerceIn(0, 10)
+        applyLoudnessEnhancer()
+    }
+
+    fun getVolumeBoost(): Int = boostLevel
+
+    fun setSkipSilence(enabled: Boolean) {
+        isSkipSilenceEnabled = enabled
+        instance?.setSkipSilenceEnabled(enabled)
+    }
+
+    fun isSkipSilenceEnabled(): Boolean = isSkipSilenceEnabled
+
+    fun setRepeatMode(mode: Int) {
+        repeatModeVal = mode
+        instance?.repeatMode = mode
+    }
+
+    fun getRepeatMode(): Int = repeatModeVal
+
+    fun setTunnelingEnabled(enabled: Boolean) {
+        if (isTunnelingEnabled != enabled) {
+            isTunnelingEnabled = enabled
+            val player = instance
+            if (player != null) {
+                val currentPosition = player.currentPosition
+                val currentItem = currentVideoMediaItem
+                releasePlayer()
+                if (currentItem != null) {
+                    playMedia(currentItem, currentPosition)
+                } else {
+                    initializePlayer()
+                }
+            }
+        }
+    }
+
+    fun isTunnelingEnabled(): Boolean = isTunnelingEnabled
+
     fun releasePlayer() {
+        loudnessEnhancer?.release()
+        loudnessEnhancer = null
         instance?.stop()
         instance?.clearMediaItems()
         instance?.release()
         instance = null
         currentMediaId = null
         currentMediaMimeType = null
+        currentVideoMediaItem = null
     }
 
     // Track Selection Logic

@@ -4,13 +4,17 @@ import android.app.Activity
 import android.app.PictureInPictureParams
 import android.content.pm.ActivityInfo
 import android.content.res.Configuration
+import android.net.Uri
 import android.os.Build
 import android.util.Rational
 import android.view.ViewGroup
 import android.view.WindowManager
 import android.widget.FrameLayout
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import kotlin.OptIn
+import androidx.media3.common.Player
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.*
@@ -81,6 +85,9 @@ fun VideoPlayerScreen(
     val isLocked by viewModel.isLocked.collectAsState()
     val playbackSpeed by viewModel.playbackSpeed.collectAsState()
     val resizeMode by viewModel.resizeMode.collectAsState()
+    val skipSilence by viewModel.skipSilence.collectAsState()
+    val volumeBoost by viewModel.volumeBoost.collectAsState()
+    val repeatMode by viewModel.repeatMode.collectAsState()
 
     val orientationMode by viewModel.orientationMode.collectAsState()
     val isInPipMode by viewModel.isInPipMode.collectAsState()
@@ -100,6 +107,40 @@ fun VideoPlayerScreen(
     var activeGesture by remember { mutableStateOf<GestureType?>(null) }
     
     val scope = rememberCoroutineScope()
+
+    val subtitlePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            val contentResolver = context.contentResolver
+            var displayName = "External Subtitle"
+            try {
+                contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+                    val nameIndex = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+                    if (nameIndex != -1 && cursor.moveToFirst()) {
+                        val name = cursor.getString(nameIndex)
+                        if (!name.isNullOrBlank()) {
+                            displayName = name
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+            var resolvedMime = contentResolver.getType(uri) ?: ""
+            if (resolvedMime.isBlank() || resolvedMime == "application/octet-stream") {
+                val nameLower = displayName.lowercase(java.util.Locale.US)
+                resolvedMime = when {
+                    nameLower.endsWith(".srt") -> "application/x-subrip"
+                    nameLower.endsWith(".vtt") -> "text/vtt"
+                    nameLower.endsWith(".ssa") || nameLower.endsWith(".ass") -> "text/x-ssa"
+                    nameLower.endsWith(".ttml") -> "application/ttml+xml"
+                    else -> "text/vtt"
+                }
+            }
+            viewModel.addExternalSubtitle(uri, resolvedMime, displayName)
+        }
+    }
 
     BackHandler(onBack = onBackPressed)
 
@@ -635,6 +676,12 @@ fun VideoPlayerScreen(
             onResizeModeChange = { viewModel.setResizeMode(it) },
             audioTracks = audioTracks,
             onAudioTrackSelect = { viewModel.selectAudioTrack(it) },
+            skipSilence = skipSilence,
+            onSkipSilenceChange = { viewModel.toggleSkipSilence() },
+            volumeBoost = volumeBoost,
+            onVolumeBoostChange = { viewModel.setVolumeBoost(it) },
+            repeatMode = repeatMode,
+            onRepeatModeChange = { viewModel.toggleRepeatMode() },
             onSleepClick = { /* Sleep logic */ },
             onDismiss = { showSettings = false }
         )
@@ -648,6 +695,10 @@ fun VideoPlayerScreen(
             onSubtitleTrackSelect = { 
                 viewModel.selectSubtitleTrack(it)
                 showSubtitleDialog = false
+            },
+            onPickExternalSubtitle = {
+                showSubtitleDialog = false
+                subtitlePickerLauncher.launch(arrayOf("*/*"))
             },
             onDismiss = { showSubtitleDialog = false }
         )
@@ -960,6 +1011,12 @@ fun AdvancedSettingsDialog(
     onResizeModeChange: (Int) -> Unit,
     audioTracks: List<AudioTrackInfo>,
     onAudioTrackSelect: (String) -> Unit,
+    skipSilence: Boolean,
+    onSkipSilenceChange: () -> Unit,
+    volumeBoost: Int,
+    onVolumeBoostChange: (Int) -> Unit,
+    repeatMode: Int,
+    onRepeatModeChange: () -> Unit,
     onSleepClick: () -> Unit,
     onDismiss: () -> Unit
 ) {
@@ -1012,6 +1069,17 @@ fun AdvancedSettingsDialog(
                                 audioTracks = audioTracks,
                                 onAudioTrackSelect = onAudioTrackSelect
                             )
+                            if (audioTracks.isNotEmpty()) {
+                                Spacer(modifier = Modifier.height(20.dp))
+                            }
+                            AdvancedPlaybackSection(
+                                skipSilence = skipSilence,
+                                onSkipSilenceChange = onSkipSilenceChange,
+                                volumeBoost = volumeBoost,
+                                onVolumeBoostChange = onVolumeBoostChange,
+                                repeatMode = repeatMode,
+                                onRepeatModeChange = onRepeatModeChange
+                            )
                         }
                         Column(modifier = Modifier.weight(1f).padding(start = 12.dp)) {
                             PlaybackSection(currentSpeed, onSpeedChange)
@@ -1024,10 +1092,21 @@ fun AdvancedSettingsDialog(
                         audioTracks = audioTracks,
                         onAudioTrackSelect = onAudioTrackSelect
                     )
-                    HorizontalDivider(color = Color.White.copy(alpha = 0.1f), modifier = Modifier.padding(vertical = 16.dp))
+                    if (audioTracks.isNotEmpty()) {
+                        HorizontalDivider(color = Color.White.copy(alpha = 0.1f), modifier = Modifier.padding(vertical = 16.dp))
+                    }
                     PlaybackSection(currentSpeed, onSpeedChange)
                     HorizontalDivider(color = Color.White.copy(alpha = 0.1f), modifier = Modifier.padding(vertical = 16.dp))
                     DisplaySection(resizeMode, onResizeModeChange)
+                    HorizontalDivider(color = Color.White.copy(alpha = 0.1f), modifier = Modifier.padding(vertical = 16.dp))
+                    AdvancedPlaybackSection(
+                        skipSilence = skipSilence,
+                        onSkipSilenceChange = onSkipSilenceChange,
+                        volumeBoost = volumeBoost,
+                        onVolumeBoostChange = onVolumeBoostChange,
+                        repeatMode = repeatMode,
+                        onRepeatModeChange = onRepeatModeChange
+                    )
                 }
             }
         }
@@ -1305,6 +1384,7 @@ fun SubtitleSelectionDialog(
     selectedSize: SubtitleSize,
     onSubtitleSizeChange: (SubtitleSize) -> Unit,
     onSubtitleTrackSelect: (String?) -> Unit,
+    onPickExternalSubtitle: () -> Unit,
     onDismiss: () -> Unit
 ) {
     val configuration = androidx.compose.ui.platform.LocalConfiguration.current
@@ -1423,6 +1503,15 @@ fun SubtitleSelectionDialog(
                         )
                     }
                 }
+
+                Spacer(modifier = Modifier.height(16.dp))
+                SubtitleTrackRow(
+                    title = "Add external subtitle file...",
+                    selected = false,
+                    minHeight = rowMinHeight,
+                    modifier = Modifier.fillMaxWidth(),
+                    onClick = onPickExternalSubtitle
+                )
             }
         }
     }
@@ -1470,6 +1559,93 @@ fun SubtitleTrackRow(
             if (selected) {
                 Icon(Icons.Rounded.CheckCircle, contentDescription = null, tint = PrimaryAccent, modifier = Modifier.size(22.dp))
             }
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+fun AdvancedPlaybackSection(
+    skipSilence: Boolean,
+    onSkipSilenceChange: () -> Unit,
+    volumeBoost: Int,
+    onVolumeBoostChange: (Int) -> Unit,
+    repeatMode: Int,
+    onRepeatModeChange: () -> Unit
+) {
+    SettingsSectionHeader(Icons.Rounded.PlayArrow, "Playback Options")
+    Spacer(modifier = Modifier.height(12.dp))
+    
+    FlowRow(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        val repeatLabel = when (repeatMode) {
+            Player.REPEAT_MODE_ONE -> "Repeat: One"
+            Player.REPEAT_MODE_ALL -> "Repeat: All"
+            else -> "Repeat: Off"
+        }
+        SettingsChip(
+            selected = repeatMode != Player.REPEAT_MODE_OFF,
+            label = repeatLabel,
+            onClick = onRepeatModeChange
+        )
+        
+        SettingsChip(
+            selected = skipSilence,
+            label = if (skipSilence) "Skip Silence: On" else "Skip Silence: Off",
+            onClick = onSkipSilenceChange
+        )
+    }
+    
+    Spacer(modifier = Modifier.height(16.dp))
+    
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Rounded.Hearing, contentDescription = null, tint = PrimaryAccent, modifier = Modifier.size(18.dp))
+            Spacer(modifier = Modifier.width(8.dp))
+            Text("Volume Boost", color = Color.White, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+        }
+        
+        val boostLabel = if (volumeBoost > 0) "+${volumeBoost * 2} dB" else "Off"
+        Box(
+            modifier = Modifier
+                .background(PrimaryAccent.copy(alpha = 0.2f), RoundedCornerShape(8.dp))
+                .padding(horizontal = 8.dp, vertical = 4.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = boostLabel,
+                color = Color.White,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Bold
+            )
+        }
+    }
+    Spacer(modifier = Modifier.height(8.dp))
+    
+    FlowRow(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        listOf(
+            0 to "Off",
+            1 to "+2 dB",
+            3 to "+6 dB",
+            6 to "+12 dB",
+            10 to "+20 dB"
+        ).forEach { (level, label) ->
+            SettingsChip(
+                selected = volumeBoost == level,
+                label = label,
+                onClick = { onVolumeBoostChange(level) }
+            )
         }
     }
 }
