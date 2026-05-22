@@ -140,9 +140,16 @@ fun TvBrowseScreen(
         base.applySortOrder(sortOrder)
     }
     val folders = remember(filteredVideos) { buildFolders(filteredVideos) }
+    val currentFolder = remember(folders, selectedFolder?.path, selectedFolder?.name) {
+        selectedFolder?.let { selected ->
+            folders.firstOrNull { folder ->
+                folder.path == selected.path && folder.name == selected.name
+            }
+        }
+    }
 
-    val filteredFolderVideos = remember(selectedFolder, searchQuery, sortOrder) {
-        val folderVideos = selectedFolder?.videos.orEmpty()
+    val filteredFolderVideos = remember(currentFolder, searchQuery, sortOrder) {
+        val folderVideos = currentFolder?.videos.orEmpty()
         val base = if (searchQuery.isBlank()) folderVideos
                    else folderVideos.filter { it.cleanTvTitle().contains(searchQuery, ignoreCase = true) }
         base.applySortOrder(sortOrder)
@@ -158,7 +165,13 @@ fun TvBrowseScreen(
         }
     }
 
-    LaunchedEffect(filteredVideos, filteredFolderVideos, selectedFolder?.path, selectedFolder?.name, isGridView, videoToRename, videoToDelete, showSearch, showSortDialog) {
+    LaunchedEffect(selectedFolder?.path, selectedFolder?.name, currentFolder) {
+        if (selectedFolder != null && currentFolder == null) {
+            selectedFolder = null
+        }
+    }
+
+    LaunchedEffect(filteredVideos, filteredFolderVideos, currentFolder?.path, currentFolder?.name, isGridView, videoToRename, videoToDelete, showSearch, showSortDialog) {
         if (videoToRename != null || videoToDelete != null || showSearch || showSortDialog) return@LaunchedEffect
         delay(120)
         runCatching { firstItemFocusRequester.requestFocus() }
@@ -226,15 +239,15 @@ fun TvBrowseScreen(
                 }
             } else {
                 FileToolbar(
-                    title = selectedFolder?.name ?: "Folders",
-                    subtitle = selectedFolder
+                    title = currentFolder?.name ?: "Folders",
+                    subtitle = currentFolder
                         ?.let { "${filteredFolderVideos.size} videos" }
                         ?: "${folders.size} folders, ${filteredVideos.size} videos",
-                    showBack = selectedFolder != null,
+                    showBack = currentFolder != null,
                     isGridView = isGridView,
                     isRefreshing = isRefreshing,
                     sortOrder = sortOrder,
-                    topBarFocusRequester = if ((selectedFolder != null && filteredFolderVideos.isEmpty()) || (selectedFolder == null && filteredVideos.isEmpty())) firstItemFocusRequester else null,
+                    topBarFocusRequester = if ((currentFolder != null && filteredFolderVideos.isEmpty()) || (currentFolder == null && filteredVideos.isEmpty())) firstItemFocusRequester else null,
                     onBack = { selectedFolder = null },
                     onToggleView = { isGridView = !isGridView },
                     onRefresh = {
@@ -246,7 +259,7 @@ fun TvBrowseScreen(
                         }
                     },
                     onPlayAll = {
-                        val listToPlay = if (selectedFolder != null) filteredFolderVideos else filteredVideos
+                        val listToPlay = if (currentFolder != null) filteredFolderVideos else filteredVideos
                         if (listToPlay.isNotEmpty()) onPlayAllClick(listToPlay)
                     },
                     onSearchClick = { showSearch = true },
@@ -256,7 +269,7 @@ fun TvBrowseScreen(
 
             if (filteredVideos.isEmpty()) {
                 EmptyLibraryMessage()
-            } else if (selectedFolder == null) {
+            } else if (currentFolder == null) {
                 if (isGridView) {
                     FolderGrid(
                         folders = folders,
