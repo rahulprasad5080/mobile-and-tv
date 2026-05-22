@@ -100,6 +100,16 @@ class TvPlayerViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
+    /**
+     * Bug 2 & 3 fix (Android TV 9): On API 28 ExoPlayer may fire onTracksChanged before all
+     * tracks are parsed, resulting in empty audio/subtitle lists when the popup opens.
+     * Call this when opening the audio or subtitle popup to force a fresh read from ExoPlayer.
+     */
+    fun refreshTracks() {
+        _audioTracks.value = playerManager.getAudioTracks()
+        _subtitleTracks.value = playerManager.getSubtitleTracks()
+    }
+
     fun toggleAutoFrameRate() {
         val newVal = !_autoFrameRate.value
         _autoFrameRate.value = newVal

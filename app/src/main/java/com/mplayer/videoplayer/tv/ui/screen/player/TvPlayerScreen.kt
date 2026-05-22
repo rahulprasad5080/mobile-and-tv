@@ -299,13 +299,15 @@ fun TvPlayerScreen(
                         showControls = true
                         true
                     }
-                    Key.MediaRewind -> {
+                    Key.MediaRewind,
+                    Key.MediaSkipBackward -> {
                         if (isRepeatedKey) return@onPreviewKeyEvent true
                         viewModel.seekBy(-10_000)
                         restorePlayFocus()
                         true
                     }
-                    Key.MediaFastForward -> {
+                    Key.MediaFastForward,
+                    Key.MediaSkipForward -> {
                         if (isRepeatedKey) return@onPreviewKeyEvent true
                         viewModel.seekBy(10_000)
                         restorePlayFocus()
@@ -352,26 +354,20 @@ fun TvPlayerScreen(
                         }
                     }
                     Key.DirectionLeft -> {
-                        // Allow repeated presses for continuous seeking while D-pad held down
-                        // Mirrors reference Player-master KEYCODE_DPAD_LEFT repeat handling
-                        if (!showControls) {
-                            viewModel.seekBy(-10_000)
-                            restorePlayFocus()
-                            true
-                        } else {
-                            false
-                        }
+                        // D-pad Left always seeks backward regardless of controls visibility.
+                        // Previously it only seeked when controls were hidden — this caused
+                        // focus to jump between buttons when controls were shown on Android TV 9.
+                        viewModel.seekBy(-10_000)
+                        restorePlayFocus()
+                        controlsInteractionTrigger++
+                        true
                     }
                     Key.DirectionRight -> {
-                        // Allow repeated presses for continuous seeking while D-pad held down
-                        // Mirrors reference Player-master KEYCODE_DPAD_RIGHT repeat handling
-                        if (!showControls) {
-                            viewModel.seekBy(10_000)
-                            restorePlayFocus()
-                            true
-                        } else {
-                            false
-                        }
+                        // D-pad Right always seeks forward regardless of controls visibility.
+                        viewModel.seekBy(10_000)
+                        restorePlayFocus()
+                        controlsInteractionTrigger++
+                        true
                     }
                     Key.DirectionUp,
                     Key.DirectionDown,
@@ -543,10 +539,16 @@ fun TvPlayerScreen(
     }
 
     if (showAudioPopup) {
-        // Bug 5 fix: pause player to prevent hang on Android 14 when popup opens
-        LaunchedEffect(Unit) { viewModel.playerManager.pause() }
+        // Pause player and force-refresh track list when popup opens.
+        // Bug 2 fix (Android TV 9): ExoPlayer on API 28 may fire onTracksChanged before all
+        // tracks are parsed; refreshTracks() re-reads directly from the current player state.
+        LaunchedEffect(Unit) {
+            viewModel.playerManager.pause()
+            viewModel.refreshTracks()
+        }
         TvAudioTracksPopup(
             audioTracks = audioTracks,
+            onRefreshTracks = { viewModel.refreshTracks() },
             onDismiss = {
                 showAudioPopup = false
                 viewModel.playerManager.resume()
@@ -560,10 +562,15 @@ fun TvPlayerScreen(
     }
 
     if (showSubtitlePopup) {
-        // Bug 5 fix: pause player to prevent hang on Android 14 when popup opens
-        LaunchedEffect(Unit) { viewModel.playerManager.pause() }
+        // Pause player and force-refresh track list when popup opens.
+        // Bug 3 fix (Android TV 9): same issue as audio tracks — re-read from ExoPlayer state.
+        LaunchedEffect(Unit) {
+            viewModel.playerManager.pause()
+            viewModel.refreshTracks()
+        }
         TvSubtitleTracksPopup(
             subtitleTracks = subtitleTracks,
+            onRefreshTracks = { viewModel.refreshTracks() },
             onDismiss = {
                 showSubtitlePopup = false
                 viewModel.playerManager.resume()
@@ -923,11 +930,25 @@ private fun TvProgressBar(
 @Composable
 private fun TvAudioTracksPopup(
     audioTracks: List<AudioTrackInfo>,
+    onRefreshTracks: () -> Unit,
     onDismiss: () -> Unit,
     onAudioSelect: (String) -> Unit
 ) {
     BackHandler(onBack = onDismiss)
     val firstOptionFocusRequester = remember { FocusRequester() }
+
+    // Bug 2 fix (Android TV 9): If tracks are empty when popup opens, retry fetching them.
+    // ExoPlayer on API 28 sometimes fires onTracksChanged before all tracks are parsed.
+    LaunchedEffect(Unit) {
+        repeat(3) { attempt ->
+            if (audioTracks.isEmpty()) {
+                delay(if (attempt == 0) 300L else 600L)
+                onRefreshTracks()
+            } else {
+                return@repeat
+            }
+        }
+    }
 
     LaunchedEffect(audioTracks) {
         if (audioTracks.isNotEmpty()) {
@@ -955,11 +976,24 @@ private fun TvAudioTracksPopup(
 @Composable
 private fun TvSubtitleTracksPopup(
     subtitleTracks: List<SubtitleTrackInfo>,
+    onRefreshTracks: () -> Unit,
     onDismiss: () -> Unit,
     onSubtitleSelect: (String?) -> Unit
 ) {
     BackHandler(onBack = onDismiss)
     val firstOptionFocusRequester = remember { FocusRequester() }
+
+    // Bug 3 fix (Android TV 9): Retry fetching subtitle tracks if empty when popup opens.
+    LaunchedEffect(Unit) {
+        repeat(3) { attempt ->
+            if (subtitleTracks.isEmpty()) {
+                delay(if (attempt == 0) 300L else 600L)
+                onRefreshTracks()
+            } else {
+                return@repeat
+            }
+        }
+    }
 
     LaunchedEffect(Unit) {
         delay(100)

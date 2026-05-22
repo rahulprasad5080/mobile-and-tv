@@ -478,8 +478,16 @@ class PlayerManager(private val context: Context) {
 
         for (groupIndex in 0 until tracks.groups.size) {
             val group = tracks.groups[groupIndex]
-            val isTextGroup = group.type == C.TRACK_TYPE_TEXT ||
-                (group.length > 0 && group.getTrackFormat(0).sampleMimeType?.startsWith("text/") == true)
+            val firstMime = if (group.length > 0) group.getTrackFormat(0).sampleMimeType else null
+            // Bug 3 fix (Android TV 9): SRT subtitles use MIME 'application/x-subrip' which
+            // doesn't start with 'text/', so we also match known subtitle application/ types.
+            val isSubtitleMime = firstMime != null && (
+                firstMime.startsWith("text/") ||
+                firstMime == "application/x-subrip" ||
+                firstMime == "application/ttml+xml" ||
+                firstMime == "application/mp4" && group.type == C.TRACK_TYPE_TEXT
+            )
+            val isTextGroup = group.type == C.TRACK_TYPE_TEXT || (group.length > 0 && isSubtitleMime)
             if (isTextGroup) {
                 for (i in 0 until group.length) {
                     val format = group.getTrackFormat(i)

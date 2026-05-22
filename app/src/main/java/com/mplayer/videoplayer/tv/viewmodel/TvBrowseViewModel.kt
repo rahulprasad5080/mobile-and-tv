@@ -50,8 +50,13 @@ class TvBrowseViewModel(application: Application) : AndroidViewModel(application
         loadVideosJob?.cancel()
         loadVideosJob = viewModelScope.launch {
             repository.getVideos(getApplication()).collect { latestVideos ->
-                val mediaStoreIds = latestVideos.map { it.id }.toSet()
-                _deletedIds.value = _deletedIds.value.filter { mediaStoreIds.contains(it) }.toSet()
+                // Bug 4 fix (Android TV 9): Do NOT prune _deletedIds based on whether the
+                // file is still in MediaStore. On Android 9, MediaStore takes 1-2 seconds to
+                // reflect a deletion after the file is physically removed. The ContentObserver
+                // fires immediately, triggering loadVideos() — and the old code would remove
+                // the ID from _deletedIds because it still appeared in MediaStore, making the
+                // deleted file reappear in the UI. Now we keep _deletedIds as-is; the ID
+                // becomes a no-op filter once MediaStore eventually removes the file from _videos.
                 _renamedItems.value = _renamedItems.value.filter { (id, newTitle) ->
                     latestVideos.find { it.id == id }?.title != newTitle
                 }
