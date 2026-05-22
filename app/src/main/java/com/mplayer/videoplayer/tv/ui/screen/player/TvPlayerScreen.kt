@@ -168,6 +168,12 @@ fun TvPlayerScreen(
     val focusScope = rememberCoroutineScope()
     val isModalOpen = showSettings || showAudioPopup || showSubtitlePopup
 
+    // Seek overlay state — shows "HH:MM:SS [+/-MM:SS]" on screen during seeking
+    var seekDeltaMs by remember { mutableStateOf(0L) }
+    var showSeekOverlay by remember { mutableStateOf(false) }
+    val seekOverlayScope = rememberCoroutineScope()
+    var seekOverlayJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
+
     val lifecycleOwner = LocalLifecycleOwner.current
     var wasPlayingBeforePause by remember { mutableStateOf(false) }
 
@@ -299,6 +305,15 @@ fun TvPlayerScreen(
                         else             -> 10_000L
                     }
                     viewModel.seekBy(remoteSeekDirection * seekMs)
+                    // Update seek overlay delta
+                    seekDeltaMs += remoteSeekDirection * seekMs
+                    showSeekOverlay = true
+                    seekOverlayJob?.cancel()
+                    seekOverlayJob = seekOverlayScope.launch {
+                        delay(1_500)
+                        showSeekOverlay = false
+                        seekDeltaMs = 0L
+                    }
                     restorePlayFocus()
                     controlsInteractionTrigger++
                     return@onPreviewKeyEvent true
@@ -418,6 +433,38 @@ fun TvPlayerScreen(
             },
             modifier = Modifier.fillMaxSize()
         )
+
+        // Seek overlay — shows current position + accumulated delta like "20:28 [+04:20]"
+        if (showSeekOverlay) {
+            Box(
+                modifier = androidx.compose.ui.Modifier
+                    .align(Alignment.Center)
+                    .background(
+                        color = Color.Black.copy(alpha = 0.72f),
+                        shape = RoundedCornerShape(12.dp)
+                    )
+                    .padding(horizontal = 32.dp, vertical = 18.dp)
+            ) {
+                val deltaSign = if (seekDeltaMs >= 0) "+" else "-"
+                val absDelta = kotlin.math.abs(seekDeltaMs)
+                androidx.compose.foundation.layout.Column(
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        text = formatTime(currentPosition),
+                        color = Color.White,
+                        style = MaterialTheme.typography.displaySmall,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = "[$deltaSign${formatTime(absDelta)}]",
+                        color = TvAccent,
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+            }
+        }
 
         if (playbackErrorMessage != null) {
             Surface(
