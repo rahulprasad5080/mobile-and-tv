@@ -240,6 +240,18 @@ class PlayerManager(private val context: Context) {
         instance?.seekTo(positionMs)
     }
 
+    fun seekForwardTo(positionMs: Long) {
+        val player = instance ?: return
+        player.setSeekParameters(SeekParameters.NEXT_SYNC)
+        player.seekTo(positionMs)
+    }
+
+    fun seekBackwardTo(positionMs: Long) {
+        val player = instance ?: return
+        player.setSeekParameters(SeekParameters.PREVIOUS_SYNC)
+        player.seekTo(positionMs)
+    }
+
     /**
      * Seek backward (e.g. Left arrow on TV remote).
      * Uses PREVIOUS_SYNC for accurate backward seek — same as reference Player-master.

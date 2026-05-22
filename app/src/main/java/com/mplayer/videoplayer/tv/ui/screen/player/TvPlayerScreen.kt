@@ -168,11 +168,15 @@ fun TvPlayerScreen(
     val focusScope = rememberCoroutineScope()
     val isModalOpen = showSettings || showAudioPopup || showSubtitlePopup
 
-    // Seek overlay state — shows "HH:MM:SS [+/-MM:SS]" on screen during seeking (Netflix style)
-    var seekDeltaMs by remember { mutableStateOf(0L) }
+    // Seek overlay state — Netflix style: tracks intended target, not stale player position
+    // seekTargetMs: where we WANT to seek to (our own tracking, not ExoPlayer's currentPosition)
+    // seekStartMs:  position when seeking started (to compute delta for overlay)
+    var seekTargetMs by remember { mutableStateOf(-1L) }
+    var seekStartMs  by remember { mutableStateOf(0L) }
     var showSeekOverlay by remember { mutableStateOf(false) }
+    var wasPlayingBeforeSeek by remember { mutableStateOf(false) }
     val seekOverlayScope = rememberCoroutineScope()
-    var seekOverlayJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
+    var seekOverlayJob  by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
 
     val lifecycleOwner = LocalLifecycleOwner.current
     var wasPlayingBeforePause by remember { mutableStateOf(false) }
@@ -287,41 +291,104 @@ fun TvPlayerScreen(
             .focusable()
             .background(Color.Black)
             .onPreviewKeyEvent { event ->
-                if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
                 if (isModalOpen) return@onPreviewKeyEvent false
-                val isRepeatedKey = event.nativeKeyEvent.repeatCount > 0
+
+                val keyCode = event.nativeKeyEvent.keyCode
                 val repeatCount = event.nativeKeyEvent.repeatCount
-                val remoteSeekDirection = tvRemoteSeekDirection(
-                    keyCode = event.nativeKeyEvent.keyCode,
-                    showControls = showControls,
-                    rootHasFocus = rootHasFocus
-                )
-                if (remoteSeekDirection != 0) {
-                    // Progressive seek: hold longer = seek more
-                    // 0-4 repeats: 10s, 5-14 repeats: 30s, 15+ repeats: 60s
-                    val seekMs = when {
-                        repeatCount >= 15 -> 60_000L
-                        repeatCount >= 5  -> 30_000L
-                        else             -> 10_000L
-                    }
-                    viewModel.seekBy(remoteSeekDirection * seekMs)
-                    // Netflix style: show seek overlay only — NOT full controls during hold
-                    seekDeltaMs += remoteSeekDirection * seekMs
-                    showSeekOverlay = true
-                    seekOverlayJob?.cancel()
-                    seekOverlayJob = seekOverlayScope.launch {
-                        delay(1_500)
-                        showSeekOverlay = false
-                        seekDeltaMs = 0L
-                    }
-                    // First press: restore focus to play button if controls are already visible
-                    // Hold repeats: just update overlay — do NOT show full controls (Netflix style)
-                    if (repeatCount == 0 && showControls) {
-                        restorePlayFocus()
-                    }
-                    controlsInteractionTrigger++
-                    return@onPreviewKeyEvent true
+                
+                val isDpadLeft = keyCode == AndroidKeyEvent.KEYCODE_DPAD_LEFT
+                val isDpadRight = keyCode == AndroidKeyEvent.KEYCODE_DPAD_RIGHT
+                
+                val isDedicatedSeekKey = when (keyCode) {
+                    AndroidKeyEvent.KEYCODE_MEDIA_REWIND,
+                    AndroidKeyEvent.KEYCODE_MEDIA_SKIP_BACKWARD,
+                    AndroidKeyEvent.KEYCODE_MEDIA_STEP_BACKWARD,
+                    AndroidKeyEvent.KEYCODE_BUTTON_L2,
+                    AndroidKeyEvent.KEYCODE_MEDIA_FAST_FORWARD,
+                    AndroidKeyEvent.KEYCODE_MEDIA_SKIP_FORWARD,
+                    AndroidKeyEvent.KEYCODE_MEDIA_STEP_FORWARD,
+                    AndroidKeyEvent.KEYCODE_BUTTON_R2 -> true
+                    else -> false
                 }
+                
+                // Intercept key for seeking if:
+                // 1. It is a dedicated media seek/skip key
+                // 2. We are already in seeking mode (seekTargetMs >= 0L)
+                // 3. It is DPAD Left/Right and controls are hidden / root has focus
+                // 4. It is DPAD Left/Right and the key is held (repeatCount > 0)
+                val shouldSeek = isDedicatedSeekKey ||
+                        (seekTargetMs >= 0L) ||
+                        ((isDpadLeft || isDpadRight) && (shouldTvDpadSeek(showControls, rootHasFocus) || repeatCount > 0))
+
+                if (shouldSeek) {
+                    val direction = when (keyCode) {
+                        AndroidKeyEvent.KEYCODE_MEDIA_REWIND,
+                        AndroidKeyEvent.KEYCODE_MEDIA_SKIP_BACKWARD,
+                        AndroidKeyEvent.KEYCODE_MEDIA_STEP_BACKWARD,
+                        AndroidKeyEvent.KEYCODE_BUTTON_L2,
+                        AndroidKeyEvent.KEYCODE_DPAD_LEFT -> -1
+                        
+                        AndroidKeyEvent.KEYCODE_MEDIA_FAST_FORWARD,
+                        AndroidKeyEvent.KEYCODE_MEDIA_SKIP_FORWARD,
+                        AndroidKeyEvent.KEYCODE_MEDIA_STEP_FORWARD,
+                        AndroidKeyEvent.KEYCODE_BUTTON_R2,
+                        AndroidKeyEvent.KEYCODE_DPAD_RIGHT -> 1
+                        
+                        else -> 0
+                    }
+                    
+                    if (direction != 0) {
+                        if (event.type == KeyEventType.KeyDown) {
+                            // Progressive seek speed: hold longer = bigger steps
+                            val seekMs = when {
+                                repeatCount >= 15 -> 60_000L
+                                repeatCount >= 5  -> 30_000L
+                                else             -> 10_000L
+                            }
+                            
+                            if (seekTargetMs < 0L) {
+                                // First press — initialize target and pause player
+                                seekTargetMs = currentPosition
+                                seekStartMs = currentPosition
+                                wasPlayingBeforeSeek = isPlaying
+                                viewModel.playerManager.pause()
+                            }
+                            
+                            val newTarget = (seekTargetMs + direction * seekMs)
+                                .coerceIn(0L, duration.takeIf { it > 0 } ?: Long.MAX_VALUE)
+                            seekTargetMs = newTarget
+                            
+                            // Show overlay with target position + delta
+                            showSeekOverlay = true
+                            seekOverlayJob?.cancel()
+                            
+                            if (repeatCount == 0 && showControls) {
+                                restorePlayFocus()
+                            }
+                            controlsInteractionTrigger++
+                        } else if (event.type == KeyEventType.KeyUp) {
+                            // On KeyUp (release), execute the actual seek with direction-aware params
+                            if (seekTargetMs >= 0L) {
+                                viewModel.seekToTarget(seekTargetMs, direction)
+                                if (wasPlayingBeforeSeek) {
+                                    viewModel.playerManager.resume()
+                                }
+                            }
+                            // Start timer to hide overlay and reset target
+                            seekOverlayJob?.cancel()
+                            seekOverlayJob = seekOverlayScope.launch {
+                                delay(1_500)
+                                showSeekOverlay = false
+                                seekTargetMs = -1L
+                            }
+                        }
+                        return@onPreviewKeyEvent true
+                    }
+                }
+                
+                // For other keys, we only process on KeyDown
+                if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                val isRepeatedKey = repeatCount > 0
                 when (event.key) {
                     Key.MediaPlayPause,
                     Key.Spacebar -> {
@@ -438,9 +505,9 @@ fun TvPlayerScreen(
             modifier = Modifier.fillMaxSize()
         )
 
-        // Netflix-style seek overlay — shows position + delta like "20:28 [+04:20]"
-        // Full controls are NOT forced open during seek — only this clean overlay shows
-        if (showSeekOverlay) {
+        // Netflix-style seek overlay — shows target position + delta like "20:28 [+04:20]"
+        // Uses seekTargetMs (our own tracking) for instant accurate feedback — not stale player pos
+        if (showSeekOverlay && seekTargetMs >= 0L) {
             Box(
                 modifier = Modifier
                     .align(Alignment.Center)
@@ -450,13 +517,14 @@ fun TvPlayerScreen(
                     )
                     .padding(horizontal = 32.dp, vertical = 18.dp)
             ) {
-                val deltaSign = if (seekDeltaMs >= 0) "+" else "-"
-                val absDelta = kotlin.math.abs(seekDeltaMs)
+                val deltaMs  = seekTargetMs - seekStartMs
+                val deltaSign = if (deltaMs >= 0) "+" else "-"
+                val absDelta  = kotlin.math.abs(deltaMs)
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Text(
-                        text = formatTime(currentPosition),
+                        text = formatTime(seekTargetMs),   // show TARGET, not stale currentPosition
                         color = Color.White,
                         style = MaterialTheme.typography.displaySmall,
                         fontWeight = FontWeight.Bold

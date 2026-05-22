@@ -228,6 +228,22 @@ class TvPlayerViewModel(application: Application) : AndroidViewModel(application
         playerManager.getPlayer()?.let { _isPlaying.value = it.playWhenReady }
     }
 
+    /**
+     * Seek to an absolute position with direction-aware SeekParameters.
+     * Used for hold-to-seek: we track our own target to avoid stale currentPosition reads.
+     * direction > 0 = forward (NEXT_SYNC), direction < 0 = backward (PREVIOUS_SYNC).
+     */
+    fun seekToTarget(positionMs: Long, direction: Int) {
+        val safePosition = positionMs.coerceAtLeast(0)
+        if (direction >= 0) {
+            playerManager.seekForwardTo(safePosition)
+        } else {
+            playerManager.seekBackwardTo(safePosition)
+        }
+        _currentPosition.value = safePosition
+        playerManager.getPlayer()?.let { _isPlaying.value = it.playWhenReady }
+    }
+
     fun playNext() {
         playRelativeVideo(offset = 1)
     }
