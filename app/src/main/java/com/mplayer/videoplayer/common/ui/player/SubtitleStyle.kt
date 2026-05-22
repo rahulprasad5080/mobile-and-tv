@@ -1,3 +1,5 @@
+@file:androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
+
 package com.mplayer.videoplayer.common.ui.player
 
 import android.graphics.Color

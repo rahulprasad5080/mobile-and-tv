@@ -1,3 +1,5 @@
+@file:androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
+
 package com.mplayer.videoplayer.mobile.ui.screen.player
 
 import android.app.Activity
@@ -66,7 +68,6 @@ private val DeepBlack = Color(0xFF0C0C0C)
 private val PrimaryAccent = Color(0xFF3F51B5) // Indigo
 private val PlaybackGreen = Color(0xFF20B33A)
 
-@androidx.annotation.OptIn(UnstableApi::class)
 @Composable
 fun VideoPlayerScreen(
     viewModel: MobilePlayerViewModel,

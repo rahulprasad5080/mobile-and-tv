@@ -33,17 +33,19 @@ class VideoFileRepository {
                     0
                 }
 
-                val deletedFile = if (deletedRows <= 0) {
-                    path?.let { File(it).delete() } ?: false
-                } else {
-                    true
+                val file = path?.let { File(it) }
+                val deletedFile = when {
+                    file != null && file.exists() -> file.delete() || !file.exists()
+                    deletedRows > 0 -> true
+                    file != null -> !file.exists()
+                    else -> false
                 }
 
                 if (!deletedFile) {
                     throw IllegalStateException("Unable to delete video from storage")
                 }
 
-                path?.let {
+                path?.takeIf { !File(it).exists() }?.let {
                     MediaScannerConnection.scanFile(context, arrayOf(it), null, null)
                 }
                 null

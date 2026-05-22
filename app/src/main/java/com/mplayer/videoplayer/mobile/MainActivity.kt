@@ -1,6 +1,8 @@
 package com.mplayer.videoplayer.mobile
 
 import android.Manifest
+import android.annotation.SuppressLint
+import android.annotation.TargetApi
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
@@ -455,6 +457,7 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    @TargetApi(Build.VERSION_CODES.O)
     override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean, newConfig: Configuration) {
         super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
         if (isTelevisionDevice()) {
@@ -491,6 +494,7 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    @SuppressLint("RestrictedApi")
     override fun dispatchKeyEvent(event: android.view.KeyEvent): Boolean {
         if (isTelevisionDevice() && event.action == android.view.KeyEvent.ACTION_DOWN) {
             val currentFocus = window.currentFocus

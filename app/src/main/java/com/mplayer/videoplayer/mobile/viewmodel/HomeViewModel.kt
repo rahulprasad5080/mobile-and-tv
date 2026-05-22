@@ -87,20 +87,17 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         loadVideosJob?.cancel()
         loadVideosJob = viewModelScope.launch {
             repository.getVideos(getApplication()).collect { it ->
-                // Clear state if MediaStore has caught up
-                val currentDeleted = _deletedIds.value
+                // Keep delete tombstones until an explicit delete failure/cancel.
+                // MediaStore can briefly report stale rows after deletion, which would make
+                // deleted videos reappear if we prune _deletedIds during a refresh.
                 val currentRenamed = _renamedItems.value
                 
-                if (currentDeleted.isNotEmpty() || currentRenamed.isNotEmpty()) {
-                    val stillInMediaStore = it.map { it.id }.toSet()
-                    val newDeleted = currentDeleted.filter { id -> stillInMediaStore.contains(id) }.toSet()
-                    
+                if (currentRenamed.isNotEmpty()) {
                     val newRenamed = currentRenamed.filter { (id, newTitle) ->
                         val item = it.find { video -> video.id == id }
                         item != null && item.title != newTitle
                     }
                     
-                    _deletedIds.value = newDeleted
                     _renamedItems.value = newRenamed
                 }
 

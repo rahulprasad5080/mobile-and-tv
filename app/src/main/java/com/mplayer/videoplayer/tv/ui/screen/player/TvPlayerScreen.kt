@@ -1,3 +1,5 @@
+@file:androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
+
 package com.mplayer.videoplayer.tv.ui.screen.player
 
 import android.app.Activity
@@ -161,6 +163,7 @@ fun TvPlayerScreen(
     val settingsFocusRequester = remember { FocusRequester() }
     var focusToRestore by remember { mutableStateOf<FocusRequester?>(null) }
     var controlsInteractionTrigger by remember { mutableStateOf(0) }
+    var rootHasFocus by remember { mutableStateOf(false) }
     val focusScope = rememberCoroutineScope()
     val isModalOpen = showSettings || showAudioPopup || showSubtitlePopup
 
@@ -273,6 +276,7 @@ fun TvPlayerScreen(
             .fillMaxSize()
             .focusRequester(rootFocusRequester)
             .focusProperties { canFocus = true }
+            .onFocusChanged { rootHasFocus = it.isFocused }
             .focusable()
             .background(Color.Black)
             .onPreviewKeyEvent { event ->
@@ -354,20 +358,26 @@ fun TvPlayerScreen(
                         }
                     }
                     Key.DirectionLeft -> {
-                        // D-pad Left always seeks backward regardless of controls visibility.
-                        // Previously it only seeked when controls were hidden — this caused
-                        // focus to jump between buttons when controls were shown on Android TV 9.
-                        viewModel.seekBy(-10_000)
-                        restorePlayFocus()
-                        controlsInteractionTrigger++
-                        true
+                        // Seek only when the video surface owns focus; otherwise let DPAD move between controls.
+                        if (shouldTvDpadSeek(showControls, rootHasFocus)) {
+                            viewModel.seekBy(-10_000)
+                            restorePlayFocus()
+                            controlsInteractionTrigger++
+                            true
+                        } else {
+                            false
+                        }
                     }
                     Key.DirectionRight -> {
-                        // D-pad Right always seeks forward regardless of controls visibility.
-                        viewModel.seekBy(10_000)
-                        restorePlayFocus()
-                        controlsInteractionTrigger++
-                        true
+                        // Seek only when the video surface owns focus; otherwise let DPAD move between controls.
+                        if (shouldTvDpadSeek(showControls, rootHasFocus)) {
+                            viewModel.seekBy(10_000)
+                            restorePlayFocus()
+                            controlsInteractionTrigger++
+                            true
+                        } else {
+                            false
+                        }
                     }
                     Key.DirectionUp,
                     Key.DirectionDown,
@@ -1481,6 +1491,10 @@ private fun Key.isTvSelectKey(): Boolean {
     return this == Key.DirectionCenter ||
         this == Key.Enter ||
         this == Key.NumPadEnter
+}
+
+internal fun shouldTvDpadSeek(showControls: Boolean, rootHasFocus: Boolean): Boolean {
+    return !showControls || rootHasFocus
 }
 
 private fun androidx.compose.ui.input.key.KeyEvent.isTvSelectDown(): Boolean {
