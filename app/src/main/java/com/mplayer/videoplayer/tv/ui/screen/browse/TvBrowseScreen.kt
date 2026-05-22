@@ -9,6 +9,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -16,6 +17,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -30,15 +32,18 @@ import androidx.compose.foundation.lazy.grid.itemsIndexed as gridItemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ArrowBack
+import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.Folder
 import androidx.compose.material.icons.rounded.GridView
 import androidx.compose.material.icons.rounded.ViewList
-import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.Movie
+import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material.icons.rounded.Sort
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
@@ -49,8 +54,6 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -98,6 +101,13 @@ private val FileMuted = Color(0xFF747C8E)
 private val FileAccent = Color(0xFF156CFF)
 private val FileFocus = Color(0xFFE8F1FF)
 
+private enum class SortOrder(val label: String) {
+    NAME_AZ("Name (A → Z)"),
+    NAME_ZA("Name (Z → A)"),
+    DURATION_LONGEST("Duration (Longest first)"),
+    DURATION_SHORTEST("Duration (Shortest first)")
+}
+
 @Composable
 fun TvBrowseScreen(
     viewModel: TvBrowseViewModel,
@@ -112,17 +122,30 @@ fun TvBrowseScreen(
     var isGridView by remember { mutableStateOf(false) }
     var searchQuery by remember { mutableStateOf("") }
     var showSearch by remember { mutableStateOf(false) }
-    
-    val filteredVideos = remember(videos, searchQuery) {
-        if (searchQuery.isBlank()) videos
-        else videos.filter { it.cleanTvTitle().contains(searchQuery, ignoreCase = true) }
+    var sortOrder by remember { mutableStateOf(SortOrder.NAME_AZ) }
+    var showSortDialog by remember { mutableStateOf(false) }
+    var isRefreshing by remember { mutableStateOf(false) }
+    val coroutineScope = rememberCoroutineScope()
+
+    fun List<VideoMediaItem>.applySortOrder(order: SortOrder): List<VideoMediaItem> = when (order) {
+        SortOrder.NAME_AZ           -> sortedBy { it.cleanTvTitle().lowercase() }
+        SortOrder.NAME_ZA           -> sortedByDescending { it.cleanTvTitle().lowercase() }
+        SortOrder.DURATION_LONGEST  -> sortedByDescending { it.duration }
+        SortOrder.DURATION_SHORTEST -> sortedBy { it.duration }
+    }
+
+    val filteredVideos = remember(videos, searchQuery, sortOrder) {
+        val base = if (searchQuery.isBlank()) videos
+                   else videos.filter { it.cleanTvTitle().contains(searchQuery, ignoreCase = true) }
+        base.applySortOrder(sortOrder)
     }
     val folders = remember(filteredVideos) { buildFolders(filteredVideos) }
 
-    val filteredFolderVideos = remember(selectedFolder, searchQuery) {
+    val filteredFolderVideos = remember(selectedFolder, searchQuery, sortOrder) {
         val folderVideos = selectedFolder?.videos.orEmpty()
-        if (searchQuery.isBlank()) folderVideos
-        else folderVideos.filter { it.cleanTvTitle().contains(searchQuery, ignoreCase = true) }
+        val base = if (searchQuery.isBlank()) folderVideos
+                   else folderVideos.filter { it.cleanTvTitle().contains(searchQuery, ignoreCase = true) }
+        base.applySortOrder(sortOrder)
     }
 
     val firstItemFocusRequester = remember { FocusRequester() }
@@ -135,18 +158,17 @@ fun TvBrowseScreen(
         }
     }
 
-    LaunchedEffect(filteredVideos, filteredFolderVideos, selectedFolder?.path, selectedFolder?.name, isGridView, videoToRename, videoToDelete, showSearch) {
-        if (videoToRename != null || videoToDelete != null || showSearch) return@LaunchedEffect
+    LaunchedEffect(filteredVideos, filteredFolderVideos, selectedFolder?.path, selectedFolder?.name, isGridView, videoToRename, videoToDelete, showSearch, showSortDialog) {
+        if (videoToRename != null || videoToDelete != null || showSearch || showSortDialog) return@LaunchedEffect
         delay(120)
         runCatching { firstItemFocusRequester.requestFocus() }
     }
 
-    BackHandler(enabled = selectedFolder != null || searchQuery.isNotBlank() || showSearch) {
-        if (selectedFolder != null) {
-            selectedFolder = null
-        } else {
-            showSearch = false
-            searchQuery = ""
+    BackHandler(enabled = selectedFolder != null || searchQuery.isNotBlank() || showSearch || showSortDialog) {
+        when {
+            showSortDialog -> showSortDialog = false
+            showSearch -> { showSearch = false; searchQuery = "" }
+            selectedFolder != null -> selectedFolder = null
         }
     }
 
@@ -210,15 +232,25 @@ fun TvBrowseScreen(
                         ?: "${folders.size} folders, ${filteredVideos.size} videos",
                     showBack = selectedFolder != null,
                     isGridView = isGridView,
+                    isRefreshing = isRefreshing,
+                    sortOrder = sortOrder,
                     topBarFocusRequester = if ((selectedFolder != null && filteredFolderVideos.isEmpty()) || (selectedFolder == null && filteredVideos.isEmpty())) firstItemFocusRequester else null,
                     onBack = { selectedFolder = null },
                     onToggleView = { isGridView = !isGridView },
-                    onRefresh = { viewModel.loadVideos() },
+                    onRefresh = {
+                        coroutineScope.launch {
+                            isRefreshing = true
+                            viewModel.loadVideos()
+                            delay(600)
+                            isRefreshing = false
+                        }
+                    },
                     onPlayAll = {
                         val listToPlay = if (selectedFolder != null) filteredFolderVideos else filteredVideos
                         if (listToPlay.isNotEmpty()) onPlayAllClick(listToPlay)
                     },
-                    onSearchClick = { showSearch = true }
+                    onSearchClick = { showSearch = true },
+                    onSortClick = { showSortDialog = true }
                 )
             }
 
@@ -246,7 +278,6 @@ fun TvBrowseScreen(
                         onVideoClick = onVideoClick,
                         onRenameClick = { video ->
                             videoToRename = video
-                            // Use raw title (with extension) so VideoFileRepository can detect it
                             renameText = video.title
                         },
                         onDeleteClick = { videoToDelete = it }
@@ -258,7 +289,6 @@ fun TvBrowseScreen(
                         onVideoClick = onVideoClick,
                         onRenameClick = { video ->
                             videoToRename = video
-                            // Use raw title (with extension) so VideoFileRepository can detect it
                             renameText = video.title
                         },
                         onDeleteClick = { videoToDelete = it }
@@ -329,6 +359,94 @@ fun TvBrowseScreen(
         )
     }
 
+    // Sort By Dialog
+    if (showSortDialog) {
+        val sortFocusRequesters = remember { SortOrder.entries.map { FocusRequester() } }
+        LaunchedEffect(Unit) {
+            delay(150)
+            val currentIdx = SortOrder.entries.indexOf(sortOrder)
+            runCatching { sortFocusRequesters[currentIdx].requestFocus() }
+        }
+        AlertDialog(
+            onDismissRequest = { showSortDialog = false },
+            title = { Text("Sort By", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) },
+            text = {
+                Column {
+                    SortOrder.entries.forEachIndexed { idx, order ->
+                        val isSelected = sortOrder == order
+                        var isFocused by remember { mutableStateOf(false) }
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 2.dp)
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(
+                                    when {
+                                        isFocused -> FileFocus
+                                        isSelected -> Color(0xFFE8F1FF)
+                                        else -> Color.Transparent
+                                    }
+                                )
+                                .border(
+                                    width = if (isFocused) 2.dp else if (isSelected) 1.5.dp else 0.dp,
+                                    color = if (isFocused || isSelected) FileAccent else Color.Transparent,
+                                    shape = RoundedCornerShape(10.dp)
+                                )
+                                .focusRequester(sortFocusRequesters[idx])
+                                .onFocusChanged { isFocused = it.isFocused }
+                                .onPreviewKeyEvent { event ->
+                                    when {
+                                        event.key.isTvSelectKey() -> {
+                                            if (event.type == KeyEventType.KeyDown && event.nativeKeyEvent.repeatCount == 0) {
+                                                sortOrder = order
+                                                showSortDialog = false
+                                            }
+                                            true
+                                        }
+                                        event.type == KeyEventType.KeyDown && event.key == Key.DirectionUp -> {
+                                            if (idx > 0) runCatching { sortFocusRequesters[idx - 1].requestFocus() }
+                                            true
+                                        }
+                                        event.type == KeyEventType.KeyDown && event.key == Key.DirectionDown -> {
+                                            if (idx < sortFocusRequesters.lastIndex) runCatching { sortFocusRequesters[idx + 1].requestFocus() }
+                                            true
+                                        }
+                                        else -> false
+                                    }
+                                }
+                                .focusable()
+                                .clickable {
+                                    sortOrder = order
+                                    showSortDialog = false
+                                }
+                                .padding(horizontal = 14.dp, vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = order.label,
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = if (isSelected) FileAccent else FileText,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                modifier = Modifier.weight(1f)
+                            )
+                            if (isSelected) {
+                                Icon(
+                                    imageVector = Icons.Rounded.Check,
+                                    contentDescription = "Selected",
+                                    tint = FileAccent,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                TextButton(onClick = { showSortDialog = false }) { Text("Cancel") }
+            }
+        )
+    }
 
 }
 
@@ -338,15 +456,16 @@ private fun FileToolbar(
     subtitle: String,
     showBack: Boolean,
     isGridView: Boolean,
+    isRefreshing: Boolean = false,
+    sortOrder: SortOrder = SortOrder.NAME_AZ,
     onBack: () -> Unit,
     onToggleView: () -> Unit,
     onRefresh: () -> Unit,
     onPlayAll: () -> Unit,
     onSearchClick: () -> Unit,
+    onSortClick: () -> Unit = {},
     topBarFocusRequester: FocusRequester? = null
 ) {
-    var showMoreMenu by remember { mutableStateOf(false) }
-
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -396,33 +515,28 @@ private fun FileToolbar(
         TvBrowseIconButton(onClick = onSearchClick, modifier = Modifier.size(48.dp)) {
             Icon(Icons.Rounded.Search, contentDescription = "Search", tint = FileText)
         }
+        // Sort button — shows current sort as a small tinted icon
+        TvBrowseIconButton(onClick = onSortClick, modifier = Modifier.size(48.dp)) {
+            Icon(Icons.Rounded.Sort, contentDescription = "Sort By: ${sortOrder.label}", tint = FileAccent)
+        }
+        // Refresh button — shows spinner when isRefreshing
+        TvBrowseIconButton(onClick = onRefresh, modifier = Modifier.size(48.dp)) {
+            if (isRefreshing) {
+                androidx.compose.material3.CircularProgressIndicator(
+                    modifier = Modifier.size(22.dp),
+                    strokeWidth = 2.5.dp,
+                    color = FileAccent
+                )
+            } else {
+                Icon(Icons.Rounded.Refresh, contentDescription = "Refresh", tint = FileText)
+            }
+        }
         TvBrowseIconButton(onClick = onToggleView, modifier = Modifier.size(48.dp)) {
             Icon(
                 if (isGridView) Icons.Rounded.ViewList else Icons.Rounded.GridView, 
                 contentDescription = "Toggle View", 
                 tint = FileText
             )
-        }
-        Box {
-            TvBrowseIconButton(onClick = { showMoreMenu = true }, modifier = Modifier.size(48.dp)) {
-                Icon(Icons.Rounded.MoreVert, contentDescription = "More", tint = FileText)
-            }
-            DropdownMenu(
-                expanded = showMoreMenu,
-                onDismissRequest = { showMoreMenu = false }
-            ) {
-                DropdownMenuItem(
-                    text = { Text("Sort By") },
-                    onClick = { showMoreMenu = false }
-                )
-                DropdownMenuItem(
-                    text = { Text("Refresh") },
-                    onClick = {
-                        showMoreMenu = false
-                        onRefresh()
-                    }
-                )
-            }
         }
     }
 }
@@ -608,6 +722,7 @@ private fun FolderRow(
 }
 
 @Composable
+@OptIn(ExperimentalFoundationApi::class)
 private fun VideoRow(
     video: VideoMediaItem,
     focusRequester: FocusRequester?,
@@ -615,10 +730,53 @@ private fun VideoRow(
     onRenameClick: () -> Unit,
     onDeleteClick: () -> Unit
 ) {
-    FileListRow(
-        focusRequester = focusRequester,
-        onClick = onClick,
-        leading = {
+    val rowBodyFocusRequester = remember { FocusRequester() }
+    val editFocusRequester   = remember { FocusRequester() }
+    val deleteFocusRequester = remember { FocusRequester() }
+
+    var rowBodyFocused by remember { mutableStateOf(false) }
+    var editFocused    by remember { mutableStateOf(false) }
+    var deleteFocused  by remember { mutableStateOf(false) }
+    val anyFocused = rowBodyFocused || editFocused || deleteFocused
+
+    val bringIntoViewRequester = remember { BringIntoViewRequester() }
+    val coroutineScope = rememberCoroutineScope()
+
+    val scale by animateFloatAsState(
+        targetValue = if (anyFocused) 1.015f else 1f,
+        animationSpec = tween(100), label = "row-scale"
+    )
+    val actionsWidth by androidx.compose.animation.core.animateDpAsState(
+        targetValue = if (anyFocused) 108.dp else 0.dp,
+        animationSpec = tween(180), label = "actions-width"
+    )
+
+    Surface(
+        color = when {
+            editFocused || deleteFocused -> FileFocus
+            anyFocused -> FileFocus
+            else -> Color.Transparent
+        },
+        shape = RoundedCornerShape(6.dp),
+        border = if (anyFocused) BorderStroke(2.dp, FileAccent) else null,
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(74.dp)
+            .graphicsLayer { scaleX = scale; scaleY = scale }
+            .bringIntoViewRequester(bringIntoViewRequester)
+            .onFocusChanged { state ->
+                if (state.hasFocus) {
+                    coroutineScope.launch { delay(40); bringIntoViewRequester.bringIntoView() }
+                }
+            }
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(start = 12.dp, end = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Thumbnail
             Box(
                 modifier = Modifier
                     .size(width = 76.dp, height = 46.dp)
@@ -632,44 +790,130 @@ private fun VideoRow(
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize()
                 )
-                Icon(Icons.Rounded.Movie, contentDescription = null, tint = Color.White, modifier = Modifier.size(24.dp))
+                Icon(Icons.Rounded.Movie, contentDescription = null,
+                    tint = Color.White.copy(alpha = 0.7f), modifier = Modifier.size(24.dp))
             }
-        },
-        title = video.cleanTvTitle(),
-        subtitle = "",
-        // Bug 7 fix: show duration in H:MM:SS format
-        trailing = if (video.duration > 0) formatVideoDuration(video.duration) else "",
-        actions = {
-            TvBrowseIconButton(onClick = onRenameClick, modifier = Modifier.size(44.dp)) {
-                Icon(Icons.Rounded.Edit, contentDescription = "Rename", tint = FileText)
+            Spacer(modifier = Modifier.width(14.dp))
+
+            // Row body — focusable, plays on OK
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxHeight()
+                    .then(focusRequester?.let { Modifier.focusRequester(it) } ?: Modifier)
+                    .focusRequester(rowBodyFocusRequester)
+                    .onFocusChanged { rowBodyFocused = it.isFocused }
+                    .onPreviewKeyEvent { event ->
+                        when {
+                            event.key.isTvSelectKey() &&
+                            event.type == KeyEventType.KeyDown &&
+                            event.nativeKeyEvent.repeatCount == 0 -> { onClick(); true }
+                            event.type == KeyEventType.KeyDown &&
+                            event.key == Key.DirectionRight -> {
+                                runCatching { editFocusRequester.requestFocus() }; true
+                            }
+                            else -> false
+                        }
+                    }
+                    .focusable()
+                    .clickable(onClick = onClick),
+                contentAlignment = Alignment.CenterStart
+            ) {
+                Column {
+                    Text(
+                        text = video.cleanTvTitle(),
+                        style = MaterialTheme.typography.titleMedium,
+                        color = FileText,
+                        fontWeight = if (anyFocused) FontWeight.Bold else FontWeight.SemiBold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    if (video.duration > 0) {
+                        Text(
+                            text = formatVideoDuration(video.duration),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = FileMuted, maxLines = 1
+                        )
+                    }
+                }
             }
-            TvBrowseIconButton(onClick = onDeleteClick, modifier = Modifier.size(44.dp)) {
-                Icon(Icons.Rounded.Delete, contentDescription = "Delete", tint = Color(0xFFC62828))
+
+            // Animated action buttons: slide in when focused
+            if (actionsWidth > 0.dp) {
+                Row(
+                    modifier = Modifier.width(actionsWidth),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // Edit button
+                    Box(
+                        modifier = Modifier
+                            .size(44.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(if (editFocused) FileAccent else FileFocus)
+                            .border(1.5.dp, if (editFocused) FileAccent else FilePanelLine, RoundedCornerShape(8.dp))
+                            .focusRequester(editFocusRequester)
+                            .onFocusChanged { editFocused = it.isFocused }
+                            .onPreviewKeyEvent { event ->
+                                when {
+                                    event.key.isTvSelectKey() &&
+                                    event.type == KeyEventType.KeyDown &&
+                                    event.nativeKeyEvent.repeatCount == 0 -> { onRenameClick(); true }
+                                    event.type == KeyEventType.KeyDown && event.key == Key.DirectionLeft -> {
+                                        runCatching { rowBodyFocusRequester.requestFocus() }; true
+                                    }
+                                    event.type == KeyEventType.KeyDown && event.key == Key.DirectionRight -> {
+                                        runCatching { deleteFocusRequester.requestFocus() }; true
+                                    }
+                                    else -> false
+                                }
+                            }
+                            .focusable()
+                            .clickable(onClick = onRenameClick),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Edit,
+                            contentDescription = "Rename",
+                            tint = if (editFocused) Color.White else FileAccent,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                    // Delete button
+                    Box(
+                        modifier = Modifier
+                            .size(44.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(if (deleteFocused) Color(0xFFC62828) else Color(0xFFFFECEC))
+                            .border(1.5.dp, Color(0xFFC62828).copy(alpha = 0.4f), RoundedCornerShape(8.dp))
+                            .focusRequester(deleteFocusRequester)
+                            .onFocusChanged { deleteFocused = it.isFocused }
+                            .onPreviewKeyEvent { event ->
+                                when {
+                                    event.key.isTvSelectKey() &&
+                                    event.type == KeyEventType.KeyDown &&
+                                    event.nativeKeyEvent.repeatCount == 0 -> { onDeleteClick(); true }
+                                    event.type == KeyEventType.KeyDown && event.key == Key.DirectionLeft -> {
+                                        runCatching { editFocusRequester.requestFocus() }; true
+                                    }
+                                    else -> false
+                                }
+                            }
+                            .focusable()
+                            .clickable(onClick = onDeleteClick),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Delete,
+                            contentDescription = "Delete",
+                            tint = if (deleteFocused) Color.White else Color(0xFFC62828),
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                }
             }
         }
-    )
-}
-
-@Composable
-private fun FolderGridItem(
-    folder: TvFolderModel,
-    focusRequester: FocusRequester?,
-    onClick: () -> Unit
-) {
-    FileGridCard(
-        focusRequester = focusRequester,
-        onClick = onClick,
-        imageContent = {
-            Box(
-                modifier = Modifier.fillMaxSize().background(Color(0xFFDDEBFF)),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(Icons.Rounded.Folder, contentDescription = null, tint = FileAccent, modifier = Modifier.size(48.dp))
-            }
-        },
-        title = folder.name,
-        subtitle = "${folder.videos.size} videos"
-    )
+    }
 }
 
 @Composable
@@ -683,6 +927,8 @@ private fun VideoGridItem(
     FileGridCard(
         focusRequester = focusRequester,
         onClick = onClick,
+        onRenameClick = onRenameClick,
+        onDeleteClick = onDeleteClick,
         imageContent = {
             Box(modifier = Modifier.fillMaxSize().background(Color(0xFFD6DAE4)), contentAlignment = Alignment.Center) {
                 Image(
@@ -695,29 +941,51 @@ private fun VideoGridItem(
             }
         },
         title = video.cleanTvTitle(),
-        // Bug 7 fix: show duration in H:MM:SS format
-        subtitle = if (video.duration > 0) formatVideoDuration(video.duration) else "",
-        actions = {
-            TvBrowseIconButton(onClick = onRenameClick, modifier = Modifier.size(36.dp)) {
-                Icon(Icons.Rounded.Edit, contentDescription = "Rename", tint = FileText, modifier = Modifier.size(18.dp))
-            }
-            TvBrowseIconButton(onClick = onDeleteClick, modifier = Modifier.size(36.dp)) {
-                Icon(Icons.Rounded.Delete, contentDescription = "Delete", tint = Color(0xFFC62828), modifier = Modifier.size(18.dp))
-            }
-        }
+        subtitle = if (video.duration > 0) formatVideoDuration(video.duration) else ""
     )
 }
+
+
+@Composable
+private fun FolderGridItem(
+    folder: TvFolderModel,
+    focusRequester: FocusRequester?,
+    onClick: () -> Unit
+) {
+    FileGridCard(
+        focusRequester = focusRequester,
+        onClick = onClick,
+        imageContent = {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color(0xFFDDEBFF)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.Folder,
+                    contentDescription = null,
+                    tint = FileAccent,
+                    modifier = Modifier.size(54.dp)
+                )
+            }
+        },
+        title = folder.name,
+        subtitle = "${folder.videos.size} videos"
+    )
+}
+
 
 @Composable
 @OptIn(ExperimentalFoundationApi::class)
 private fun FileListRow(
     focusRequester: FocusRequester?,
     onClick: () -> Unit,
+    onLongPress: (() -> Unit)? = null,
     leading: @Composable () -> Unit,
     title: String,
     subtitle: String,
-    trailing: String,
-    actions: (@Composable RowScope.() -> Unit)? = null
+    trailing: String
 ) {
     var isFocused by remember { mutableStateOf(false) }
     val bringIntoViewRequester = remember { BringIntoViewRequester() }
@@ -752,13 +1020,20 @@ private fun FileListRow(
                 }
             }
             .onPreviewKeyEvent { event ->
-                if (event.key.isTvSelectKey()) {
-                    if (event.type == KeyEventType.KeyDown && event.nativeKeyEvent.repeatCount == 0) {
-                        onClick()
+                when {
+                    event.key.isTvSelectKey() -> {
+                        if (event.type == KeyEventType.KeyDown && event.nativeKeyEvent.repeatCount == 0) {
+                            onClick()
+                        }
+                        true
                     }
-                    true
-                } else {
-                    false
+                    // Menu key or long-held OK triggers context menu
+                    onLongPress != null && event.type == KeyEventType.KeyDown &&
+                    event.key == Key.Menu -> {
+                        onLongPress()
+                        true
+                    }
+                    else -> false
                 }
             }
             .focusProperties { canFocus = true }
@@ -799,12 +1074,14 @@ private fun FileListRow(
                     maxLines = 1
                 )
             }
-            actions?.let {
-                Spacer(modifier = Modifier.width(12.dp))
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    content = it
+            // Hint: show MoreVert icon when focused to indicate Menu key opens actions
+            if (isFocused && onLongPress != null) {
+                Spacer(modifier = Modifier.width(8.dp))
+                Icon(
+                    imageVector = Icons.Rounded.MoreVert,
+                    contentDescription = "Press Menu for options",
+                    tint = FileAccent,
+                    modifier = Modifier.size(20.dp)
                 )
             }
         }
@@ -816,92 +1093,163 @@ private fun FileListRow(
 private fun FileGridCard(
     focusRequester: FocusRequester?,
     onClick: () -> Unit,
+    onRenameClick: (() -> Unit)? = null,
+    onDeleteClick: (() -> Unit)? = null,
     imageContent: @Composable () -> Unit,
     title: String,
-    subtitle: String,
-    actions: (@Composable RowScope.() -> Unit)? = null
+    subtitle: String
 ) {
-    var isFocused by remember { mutableStateOf(false) }
+    val cardFocusRequester   = remember { FocusRequester() }
+    val editFocusRequester   = remember { if (onRenameClick != null) FocusRequester() else FocusRequester() }
+    val deleteFocusRequester = remember { if (onDeleteClick != null) FocusRequester() else FocusRequester() }
+
+    var cardFocused   by remember { mutableStateOf(false) }
+    var editFocused   by remember { mutableStateOf(false) }
+    var deleteFocused by remember { mutableStateOf(false) }
+    val anyFocused = cardFocused || editFocused || deleteFocused
+
     val bringIntoViewRequester = remember { BringIntoViewRequester() }
     val coroutineScope = rememberCoroutineScope()
     val scale by animateFloatAsState(
-        targetValue = if (isFocused) 1.05f else 1f,
-        animationSpec = tween(100),
-        label = "file-card-scale"
+        targetValue = if (anyFocused) 1.05f else 1f,
+        animationSpec = tween(100), label = "card-scale"
+    )
+    val overlayAlpha by animateFloatAsState(
+        targetValue = if (anyFocused && onRenameClick != null) 1f else 0f,
+        animationSpec = tween(200), label = "overlay-alpha"
     )
     val requesterModifier = focusRequester?.let { Modifier.focusRequester(it) } ?: Modifier
 
     Surface(
-        color = if (isFocused) FileFocus else Color.White,
+        color = if (anyFocused) FileFocus else Color.White,
         shape = RoundedCornerShape(8.dp),
-        border = if (isFocused) BorderStroke(3.dp, FileAccent) else BorderStroke(1.dp, FilePanelLine),
+        border = if (anyFocused) BorderStroke(3.dp, FileAccent) else BorderStroke(1.dp, FilePanelLine),
         modifier = Modifier
             .fillMaxWidth()
-            .graphicsLayer {
-                scaleX = scale
-                scaleY = scale
-            }
+            .graphicsLayer { scaleX = scale; scaleY = scale }
             .then(requesterModifier)
+            .focusRequester(cardFocusRequester)
             .bringIntoViewRequester(bringIntoViewRequester)
             .onFocusChanged { state ->
-                isFocused = state.isFocused
-                if (state.isFocused) {
-                    coroutineScope.launch {
-                        delay(40)
-                        bringIntoViewRequester.bringIntoView()
-                    }
+                cardFocused = state.isFocused
+                if (state.hasFocus) {
+                    coroutineScope.launch { delay(40); bringIntoViewRequester.bringIntoView() }
                 }
             }
             .onPreviewKeyEvent { event ->
-                if (event.key.isTvSelectKey()) {
-                    if (event.type == KeyEventType.KeyDown && event.nativeKeyEvent.repeatCount == 0) {
-                        onClick()
+                when {
+                    event.key.isTvSelectKey() && event.type == KeyEventType.KeyDown &&
+                    event.nativeKeyEvent.repeatCount == 0 -> { onClick(); true }
+                    onRenameClick != null && event.type == KeyEventType.KeyDown &&
+                    event.key == Key.DirectionDown -> {
+                        runCatching { editFocusRequester.requestFocus() }; true
                     }
-                    true
-                } else {
-                    false
+                    else -> false
                 }
             }
             .focusProperties { canFocus = true }
             .clickable(onClick = onClick)
     ) {
-        Column(modifier = Modifier.fillMaxWidth().padding(12.dp)) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .aspectRatio(16f / 9f)
-                    .clip(RoundedCornerShape(6.dp)),
-                contentAlignment = Alignment.Center
-            ) {
-                imageContent()
-            }
-            Spacer(modifier = Modifier.height(12.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = title,
-                        style = MaterialTheme.typography.titleMedium,
-                        color = FileText,
-                        fontWeight = if (isFocused) FontWeight.Bold else FontWeight.SemiBold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    if (subtitle.isNotBlank()) {
-                        Text(
-                            text = subtitle,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = FileMuted,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
+        Box(modifier = Modifier.fillMaxWidth()) {
+            Column(modifier = Modifier.fillMaxWidth().padding(10.dp)) {
+                // Image
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .aspectRatio(16f / 9f)
+                        .clip(RoundedCornerShape(6.dp)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    imageContent()
                 }
-                actions?.let {
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(2.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        content = it
+                Spacer(modifier = Modifier.height(10.dp))
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = FileText,
+                    fontWeight = if (anyFocused) FontWeight.Bold else FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                if (subtitle.isNotBlank()) {
+                    Text(
+                        text = subtitle,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = FileMuted,
+                        maxLines = 1
                     )
+                }
+            }
+
+            // MX Player style: action row slides in at the bottom overlay when focused
+            if (onRenameClick != null && onDeleteClick != null) {
+                Row(
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(end = 8.dp, bottom = 8.dp)
+                        .graphicsLayer { alpha = overlayAlpha },
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    // Edit button
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(if (editFocused) FileAccent else Color.White.copy(alpha = 0.9f))
+                            .border(1.dp, if (editFocused) FileAccent else FilePanelLine, RoundedCornerShape(6.dp))
+                            .focusRequester(editFocusRequester)
+                            .onFocusChanged { editFocused = it.isFocused }
+                            .onPreviewKeyEvent { event ->
+                                when {
+                                    event.key.isTvSelectKey() && event.type == KeyEventType.KeyDown &&
+                                    event.nativeKeyEvent.repeatCount == 0 -> { onRenameClick(); true }
+                                    event.type == KeyEventType.KeyDown && event.key == Key.DirectionUp -> {
+                                        runCatching { cardFocusRequester.requestFocus() }; true
+                                    }
+                                    event.type == KeyEventType.KeyDown && event.key == Key.DirectionRight -> {
+                                        runCatching { deleteFocusRequester.requestFocus() }; true
+                                    }
+                                    else -> false
+                                }
+                            }
+                            .focusable(enabled = anyFocused)
+                            .clickable(onClick = onRenameClick),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(Icons.Rounded.Edit, contentDescription = "Rename",
+                            tint = if (editFocused) Color.White else FileAccent,
+                            modifier = Modifier.size(18.dp))
+                    }
+                    // Delete button
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(if (deleteFocused) Color(0xFFC62828) else Color.White.copy(alpha = 0.9f))
+                            .border(1.dp, Color(0xFFC62828).copy(alpha = 0.5f), RoundedCornerShape(6.dp))
+                            .focusRequester(deleteFocusRequester)
+                            .onFocusChanged { deleteFocused = it.isFocused }
+                            .onPreviewKeyEvent { event ->
+                                when {
+                                    event.key.isTvSelectKey() && event.type == KeyEventType.KeyDown &&
+                                    event.nativeKeyEvent.repeatCount == 0 -> { onDeleteClick(); true }
+                                    event.type == KeyEventType.KeyDown && event.key == Key.DirectionUp -> {
+                                        runCatching { cardFocusRequester.requestFocus() }; true
+                                    }
+                                    event.type == KeyEventType.KeyDown && event.key == Key.DirectionLeft -> {
+                                        runCatching { editFocusRequester.requestFocus() }; true
+                                    }
+                                    else -> false
+                                }
+                            }
+                            .focusable(enabled = anyFocused)
+                            .clickable(onClick = onDeleteClick),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(Icons.Rounded.Delete, contentDescription = "Delete",
+                            tint = if (deleteFocused) Color.White else Color(0xFFC62828),
+                            modifier = Modifier.size(18.dp))
+                    }
                 }
             }
         }
