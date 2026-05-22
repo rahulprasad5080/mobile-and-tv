@@ -284,13 +284,21 @@ fun TvPlayerScreen(
                 if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
                 if (isModalOpen) return@onPreviewKeyEvent false
                 val isRepeatedKey = event.nativeKeyEvent.repeatCount > 0
+                val repeatCount = event.nativeKeyEvent.repeatCount
                 val remoteSeekDirection = tvRemoteSeekDirection(
                     keyCode = event.nativeKeyEvent.keyCode,
                     showControls = showControls,
                     rootHasFocus = rootHasFocus
                 )
                 if (remoteSeekDirection != 0) {
-                    viewModel.seekBy(remoteSeekDirection * 10_000L)
+                    // Progressive seek: hold longer = seek more
+                    // 0-4 repeats: 10s, 5-14 repeats: 30s, 15+ repeats: 60s
+                    val seekMs = when {
+                        repeatCount >= 15 -> 60_000L
+                        repeatCount >= 5  -> 30_000L
+                        else             -> 10_000L
+                    }
+                    viewModel.seekBy(remoteSeekDirection * seekMs)
                     restorePlayFocus()
                     controlsInteractionTrigger++
                     return@onPreviewKeyEvent true
@@ -317,16 +325,12 @@ fun TvPlayerScreen(
                     }
                     Key.MediaRewind,
                     Key.MediaSkipBackward -> {
-                        if (isRepeatedKey) return@onPreviewKeyEvent true
-                        viewModel.seekBy(-10_000)
-                        restorePlayFocus()
+                        // Handled above by tvRemoteSeekDirection (supports hold-to-seek)
                         true
                     }
                     Key.MediaFastForward,
                     Key.MediaSkipForward -> {
-                        if (isRepeatedKey) return@onPreviewKeyEvent true
-                        viewModel.seekBy(10_000)
-                        restorePlayFocus()
+                        // Handled above by tvRemoteSeekDirection (supports hold-to-seek)
                         true
                     }
                     Key.MediaPrevious -> {
@@ -371,25 +375,13 @@ fun TvPlayerScreen(
                     }
                     Key.DirectionLeft -> {
                         // Seek only when the video surface owns focus; otherwise let DPAD move between controls.
-                        if (shouldTvDpadSeek(showControls, rootHasFocus)) {
-                            viewModel.seekBy(-10_000)
-                            restorePlayFocus()
-                            controlsInteractionTrigger++
-                            true
-                        } else {
-                            false
-                        }
+                        // Handled above by tvRemoteSeekDirection for hold-to-seek support.
+                        false
                     }
                     Key.DirectionRight -> {
                         // Seek only when the video surface owns focus; otherwise let DPAD move between controls.
-                        if (shouldTvDpadSeek(showControls, rootHasFocus)) {
-                            viewModel.seekBy(10_000)
-                            restorePlayFocus()
-                            controlsInteractionTrigger++
-                            true
-                        } else {
-                            false
-                        }
+                        // Handled above by tvRemoteSeekDirection for hold-to-seek support.
+                        false
                     }
                     Key.DirectionUp,
                     Key.DirectionDown,
