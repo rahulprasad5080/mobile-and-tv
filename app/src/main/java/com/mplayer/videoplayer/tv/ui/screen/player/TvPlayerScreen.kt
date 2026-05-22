@@ -4,6 +4,7 @@ package com.mplayer.videoplayer.tv.ui.screen.player
 
 import android.app.Activity
 import android.media.AudioManager
+import android.view.KeyEvent as AndroidKeyEvent
 import android.view.ViewGroup
 import android.widget.FrameLayout
 import androidx.activity.compose.BackHandler
@@ -283,6 +284,17 @@ fun TvPlayerScreen(
                 if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
                 if (isModalOpen) return@onPreviewKeyEvent false
                 val isRepeatedKey = event.nativeKeyEvent.repeatCount > 0
+                val remoteSeekDirection = tvRemoteSeekDirection(
+                    keyCode = event.nativeKeyEvent.keyCode,
+                    showControls = showControls,
+                    rootHasFocus = rootHasFocus
+                )
+                if (remoteSeekDirection != 0) {
+                    viewModel.seekBy(remoteSeekDirection * 10_000L)
+                    restorePlayFocus()
+                    controlsInteractionTrigger++
+                    return@onPreviewKeyEvent true
+                }
                 when (event.key) {
                     Key.MediaPlayPause,
                     Key.Spacebar -> {
@@ -1495,6 +1507,34 @@ private fun Key.isTvSelectKey(): Boolean {
 
 internal fun shouldTvDpadSeek(showControls: Boolean, rootHasFocus: Boolean): Boolean {
     return !showControls || rootHasFocus
+}
+
+internal fun tvRemoteSeekDirection(
+    keyCode: Int,
+    showControls: Boolean,
+    rootHasFocus: Boolean
+): Int {
+    return when (keyCode) {
+        AndroidKeyEvent.KEYCODE_MEDIA_REWIND,
+        AndroidKeyEvent.KEYCODE_MEDIA_SKIP_BACKWARD,
+        AndroidKeyEvent.KEYCODE_MEDIA_STEP_BACKWARD,
+        AndroidKeyEvent.KEYCODE_BUTTON_L2 -> -1
+
+        AndroidKeyEvent.KEYCODE_MEDIA_FAST_FORWARD,
+        AndroidKeyEvent.KEYCODE_MEDIA_SKIP_FORWARD,
+        AndroidKeyEvent.KEYCODE_MEDIA_STEP_FORWARD,
+        AndroidKeyEvent.KEYCODE_BUTTON_R2 -> 1
+
+        AndroidKeyEvent.KEYCODE_DPAD_LEFT -> {
+            if (shouldTvDpadSeek(showControls, rootHasFocus)) -1 else 0
+        }
+
+        AndroidKeyEvent.KEYCODE_DPAD_RIGHT -> {
+            if (shouldTvDpadSeek(showControls, rootHasFocus)) 1 else 0
+        }
+
+        else -> 0
+    }
 }
 
 private fun androidx.compose.ui.input.key.KeyEvent.isTvSelectDown(): Boolean {
