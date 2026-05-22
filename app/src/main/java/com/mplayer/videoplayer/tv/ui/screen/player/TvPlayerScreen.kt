@@ -168,7 +168,7 @@ fun TvPlayerScreen(
     val focusScope = rememberCoroutineScope()
     val isModalOpen = showSettings || showAudioPopup || showSubtitlePopup
 
-    // Seek overlay state — shows "HH:MM:SS [+/-MM:SS]" on screen during seeking
+    // Seek overlay state — shows "HH:MM:SS [+/-MM:SS]" on screen during seeking (Netflix style)
     var seekDeltaMs by remember { mutableStateOf(0L) }
     var showSeekOverlay by remember { mutableStateOf(false) }
     val seekOverlayScope = rememberCoroutineScope()
@@ -305,7 +305,7 @@ fun TvPlayerScreen(
                         else             -> 10_000L
                     }
                     viewModel.seekBy(remoteSeekDirection * seekMs)
-                    // Update seek overlay delta
+                    // Netflix style: show seek overlay only — NOT full controls during hold
                     seekDeltaMs += remoteSeekDirection * seekMs
                     showSeekOverlay = true
                     seekOverlayJob?.cancel()
@@ -314,7 +314,11 @@ fun TvPlayerScreen(
                         showSeekOverlay = false
                         seekDeltaMs = 0L
                     }
-                    restorePlayFocus()
+                    // First press: restore focus to play button if controls are already visible
+                    // Hold repeats: just update overlay — do NOT show full controls (Netflix style)
+                    if (repeatCount == 0 && showControls) {
+                        restorePlayFocus()
+                    }
                     controlsInteractionTrigger++
                     return@onPreviewKeyEvent true
                 }
@@ -434,10 +438,11 @@ fun TvPlayerScreen(
             modifier = Modifier.fillMaxSize()
         )
 
-        // Seek overlay — shows current position + accumulated delta like "20:28 [+04:20]"
+        // Netflix-style seek overlay — shows position + delta like "20:28 [+04:20]"
+        // Full controls are NOT forced open during seek — only this clean overlay shows
         if (showSeekOverlay) {
             Box(
-                modifier = androidx.compose.ui.Modifier
+                modifier = Modifier
                     .align(Alignment.Center)
                     .background(
                         color = Color.Black.copy(alpha = 0.72f),
@@ -447,7 +452,7 @@ fun TvPlayerScreen(
             ) {
                 val deltaSign = if (seekDeltaMs >= 0) "+" else "-"
                 val absDelta = kotlin.math.abs(seekDeltaMs)
-                androidx.compose.foundation.layout.Column(
+                Column(
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Text(
