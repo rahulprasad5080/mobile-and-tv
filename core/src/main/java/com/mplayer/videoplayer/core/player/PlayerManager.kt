@@ -563,7 +563,17 @@ class PlayerManager(private val context: Context) {
     }
 
     private fun buildAudioTrackLabel(label: String?, language: String?, channelCount: Int): String {
-        val baseLabel = label?.takeIf { it.isNotBlank() && !it.contains("MATROSKA", ignoreCase = true) } ?: resolveLanguageName(language)
+        // Prefer language-code resolution over the raw label when the label looks like a
+        // watermark/website name (e.g. "HDHub4u.Tv", "YTS.MX", "www.TamilRockers.ws").
+        // Such labels are embedded by piracy sites and mean nothing to the user.
+        val resolvedLanguage = resolveLanguageName(language)
+        val baseLabel = when {
+            label.isNullOrBlank() -> resolvedLanguage
+            label.contains("MATROSKA", ignoreCase = true) -> resolvedLanguage
+            isWatermarkLabel(label) -> resolvedLanguage  // ← skip watermark, use language code
+            resolvedLanguage != "Unknown" -> resolvedLanguage  // prefer resolved language name
+            else -> label  // fallback to raw label only if language can't be resolved
+        }
         val channelLabel = resolveChannelLabel(channelCount)
         return if (channelLabel != null) "$baseLabel ($channelLabel)" else baseLabel
     }
@@ -609,12 +619,45 @@ class PlayerManager(private val context: Context) {
     }
 
     private fun buildSubtitleTrackLabel(label: String?, language: String?): String {
-        val baseLabel = label?.takeIf { it.isNotBlank() && !it.contains("MATROSKA", ignoreCase = true) } ?: resolveLanguageName(language)
+        val resolvedLanguage = resolveLanguageName(language)
+        val baseLabel = when {
+            label.isNullOrBlank() -> resolvedLanguage
+            label.contains("MATROSKA", ignoreCase = true) -> resolvedLanguage
+            isWatermarkLabel(label) -> resolvedLanguage  // skip watermark, use language code
+            resolvedLanguage != "Unknown" -> resolvedLanguage  // prefer resolved language name
+            else -> label
+        }
         return if (baseLabel.contains("subtitle", ignoreCase = true)) {
             baseLabel
         } else {
             "$baseLabel Subtitles"
         }
+    }
+
+    /**
+     * Detects watermark/website labels embedded in MKV tracks by piracy sites.
+     * Examples: "HDHub4u.Tv", "YTS.MX", "www.TamilRockers.ws", "1337x.to", "RARBG"
+     *
+     * Detection rules:
+     * - Contains a dot (.) → likely a domain or version number watermark
+     * - Contains digits mixed with letters in a non-language pattern
+     * - Starts with "www." → clearly a URL
+     * - Matches known watermark site patterns
+     */
+    private fun isWatermarkLabel(label: String): Boolean {
+        val trimmed = label.trim()
+        // Starts with www. → definitely a URL
+        if (trimmed.startsWith("www.", ignoreCase = true)) return true
+        // Contains a dot → domain-like or version watermark (e.g. "HDHub4u.Tv", "YTS.MX")
+        if (trimmed.contains('.')) return true
+        // All uppercase and short (e.g. "RARBG", "YIFY") → release group watermarks
+        // But don't flag things like "ENG" or "HIN" which are valid language codes
+        if (trimmed.length > 4 && trimmed == trimmed.uppercase(Locale.US) && trimmed.any { it.isDigit() }) return true
+        // Contains digits and letters mixed together in a non-language pattern (e.g. "1337x", "x265")
+        val hasDigitsAndLetters = trimmed.any { it.isDigit() } && trimmed.any { it.isLetter() }
+        val tooLongForLanguage = trimmed.length > 8
+        if (hasDigitsAndLetters && tooLongForLanguage) return true
+        return false
     }
 
     private fun resolveLanguageName(languageCode: String?): String {
