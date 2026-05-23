@@ -54,4 +54,33 @@ class TvPlayerRemoteKeyHandlingTest {
             )
         )
     }
+
+    @Test
+    fun heldDpadLeftRightSeekEvenWhenControlsAreVisible() {
+        assertEquals(
+            1,
+            tvRemoteSeekDirection(
+                keyCode = KeyEvent.KEYCODE_DPAD_RIGHT,
+                showControls = true,
+                rootHasFocus = false,
+                repeatCount = 1
+            )
+        )
+        assertEquals(
+            -1,
+            tvRemoteSeekDirection(
+                keyCode = KeyEvent.KEYCODE_DPAD_LEFT,
+                showControls = true,
+                rootHasFocus = false,
+                repeatCount = 1
+            )
+        )
+    }
+
+    @Test
+    fun heldSeekKeysUseProgressiveSteps() {
+        assertEquals(10_000L, tvRemoteSeekStepMs(repeatCount = 0))
+        assertEquals(30_000L, tvRemoteSeekStepMs(repeatCount = 5))
+        assertEquals(60_000L, tvRemoteSeekStepMs(repeatCount = 15))
+    }
 }
