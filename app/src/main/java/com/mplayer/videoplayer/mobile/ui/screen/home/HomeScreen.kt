@@ -180,7 +180,7 @@ fun ContinueWatchingCard(
                     .background(Color.Black.copy(alpha = 0.3f))
             ) {
                 AsyncImage(
-                    model = video.uri,
+                    model = video.filePath ?: video.uri,
                     contentDescription = null,
                     modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Crop

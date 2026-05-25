@@ -23,6 +23,7 @@ import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.core.content.ContextCompat
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -259,7 +260,7 @@ class MainActivity : ComponentActivity() {
         val lastPlayedVideo by homeViewModel.lastPlayedVideo.collectAsState()
         val videos by homeViewModel.videos.collectAsState()
         
-        var selectedFolderName by remember { mutableStateOf("") }
+        var selectedFolderName by rememberSaveable { mutableStateOf("") }
 
         LaunchedEffect(externalVideoToOpen?.id) {
             val video = externalVideoToOpen ?: return@LaunchedEffect

@@ -44,6 +44,9 @@ androidx-media3-exoplayer-rtsp = { group = "androidx.media3", name = "media3-exo
 androidx-navigation-compose = { group = "androidx.navigation", name = "navigation-compose", version.ref = "navigationCompose" }
 coil-compose = { group = "io.coil-kt", name = "coil-compose", version.ref = "coil" }
 coil-video = { group = "io.coil-kt", name = "coil-video", version.ref = "coil" }
+ffmpeg-retriever-core = { group = "com.github.wseemann", name = "FFmpegMediaMetadataRetriever-core", version = "1.0.16" }
+ffmpeg-retriever-native = { group = "com.github.wseemann", name = "FFmpegMediaMetadataRetriever-native", version = "1.0.16" }
+
 
 
 [plugins]

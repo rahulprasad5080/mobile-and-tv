@@ -60,6 +60,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -115,15 +116,17 @@ fun TvBrowseScreen(
     onPlayAllClick: (List<VideoMediaItem>) -> Unit
 ) {
     val videos by viewModel.videos.collectAsState()
-    var selectedFolder by remember { mutableStateOf<TvFolderModel?>(null) }
+    val isLoading by viewModel.isLoading.collectAsState()
+    var selectedFolderPath by rememberSaveable { mutableStateOf<String?>(null) }
+    var selectedFolderName by rememberSaveable { mutableStateOf<String?>(null) }
     var videoToRename by remember { mutableStateOf<VideoMediaItem?>(null) }
     var renameText by remember { mutableStateOf("") }
     var videoToDelete by remember { mutableStateOf<VideoMediaItem?>(null) }
-    var isGridView by remember { mutableStateOf(false) }
-    var searchQuery by remember { mutableStateOf("") }
-    var showSearch by remember { mutableStateOf(false) }
-    var sortOrder by remember { mutableStateOf(SortOrder.NAME_AZ) }
-    var showSortDialog by remember { mutableStateOf(false) }
+    var isGridView by rememberSaveable { mutableStateOf(false) }
+    var searchQuery by rememberSaveable { mutableStateOf("") }
+    var showSearch by rememberSaveable { mutableStateOf(false) }
+    var sortOrder by rememberSaveable { mutableStateOf(SortOrder.NAME_AZ) }
+    var showSortDialog by rememberSaveable { mutableStateOf(false) }
     var isRefreshing by remember { mutableStateOf(false) }
     val coroutineScope = rememberCoroutineScope()
 
@@ -140,11 +143,13 @@ fun TvBrowseScreen(
         base.applySortOrder(sortOrder)
     }
     val folders = remember(filteredVideos) { buildFolders(filteredVideos) }
-    val currentFolder = remember(folders, selectedFolder?.path, selectedFolder?.name) {
-        selectedFolder?.let { selected ->
+    val currentFolder = remember(folders, selectedFolderPath, selectedFolderName) {
+        if (selectedFolderPath != null || selectedFolderName != null) {
             folders.firstOrNull { folder ->
-                folder.path == selected.path && folder.name == selected.name
+                folder.path == selectedFolderPath && folder.name == selectedFolderName
             }
+        } else {
+            null
         }
     }
 
@@ -165,9 +170,10 @@ fun TvBrowseScreen(
         }
     }
 
-    LaunchedEffect(selectedFolder?.path, selectedFolder?.name, currentFolder) {
-        if (selectedFolder != null && currentFolder == null) {
-            selectedFolder = null
+    LaunchedEffect(selectedFolderPath, selectedFolderName, currentFolder) {
+        if ((selectedFolderPath != null || selectedFolderName != null) && currentFolder == null) {
+            selectedFolderPath = null
+            selectedFolderName = null
         }
     }
 
@@ -177,11 +183,14 @@ fun TvBrowseScreen(
         runCatching { firstItemFocusRequester.requestFocus() }
     }
 
-    BackHandler(enabled = selectedFolder != null || searchQuery.isNotBlank() || showSearch || showSortDialog) {
+    BackHandler(enabled = (selectedFolderPath != null || selectedFolderName != null) || searchQuery.isNotBlank() || showSearch || showSortDialog) {
         when {
             showSortDialog -> showSortDialog = false
             showSearch -> { showSearch = false; searchQuery = "" }
-            selectedFolder != null -> selectedFolder = null
+            selectedFolderPath != null || selectedFolderName != null -> {
+                selectedFolderPath = null
+                selectedFolderName = null
+            }
         }
     }
 
@@ -248,7 +257,10 @@ fun TvBrowseScreen(
                     isRefreshing = isRefreshing,
                     sortOrder = sortOrder,
                     topBarFocusRequester = if ((currentFolder != null && filteredFolderVideos.isEmpty()) || (currentFolder == null && filteredVideos.isEmpty())) firstItemFocusRequester else null,
-                    onBack = { selectedFolder = null },
+                    onBack = {
+                        selectedFolderPath = null
+                        selectedFolderName = null
+                    },
                     onToggleView = { isGridView = !isGridView },
                     onRefresh = {
                         coroutineScope.launch {
@@ -267,20 +279,33 @@ fun TvBrowseScreen(
                 )
             }
 
-            if (filteredVideos.isEmpty()) {
+            if (isLoading) {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    androidx.compose.material3.CircularProgressIndicator(color = FileAccent)
+                }
+            } else if (filteredVideos.isEmpty()) {
                 EmptyLibraryMessage()
             } else if (currentFolder == null) {
                 if (isGridView) {
                     FolderGrid(
                         folders = folders,
                         firstItemFocusRequester = firstItemFocusRequester,
-                        onFolderClick = { selectedFolder = it }
+                        onFolderClick = { folder ->
+                            selectedFolderPath = folder.path
+                            selectedFolderName = folder.name
+                        }
                     )
                 } else {
                     FolderList(
                         folders = folders,
                         firstItemFocusRequester = firstItemFocusRequester,
-                        onFolderClick = { selectedFolder = it }
+                        onFolderClick = { folder ->
+                            selectedFolderPath = folder.path
+                            selectedFolderName = folder.name
+                        }
                     )
                 }
             } else {
@@ -798,7 +823,7 @@ private fun VideoRow(
                 contentAlignment = Alignment.Center
             ) {
                 Image(
-                    painter = rememberAsyncImagePainter(video.thumbnailUri ?: video.uri),
+                    painter = rememberAsyncImagePainter(video.filePath ?: video.uri),
                     contentDescription = null,
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize()
@@ -945,7 +970,7 @@ private fun VideoGridItem(
         imageContent = {
             Box(modifier = Modifier.fillMaxSize().background(Color(0xFFD6DAE4)), contentAlignment = Alignment.Center) {
                 Image(
-                    painter = rememberAsyncImagePainter(video.thumbnailUri ?: video.uri),
+                    painter = rememberAsyncImagePainter(video.filePath ?: video.uri),
                     contentDescription = null,
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize()

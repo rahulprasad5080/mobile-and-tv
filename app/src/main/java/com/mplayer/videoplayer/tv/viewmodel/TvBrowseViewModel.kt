@@ -27,6 +27,9 @@ class TvBrowseViewModel(application: Application) : AndroidViewModel(application
     private val _pendingIntent = MutableStateFlow<IntentSender?>(null)
     val pendingIntent: StateFlow<IntentSender?> = _pendingIntent.asStateFlow()
 
+    private val _isLoading = MutableStateFlow(true)
+    val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
+
     private val _videos = MutableStateFlow<List<VideoMediaItem>>(emptyList())
     private val _deletedIds = MutableStateFlow<Set<String>>(emptySet())
     private val _renamedItems = MutableStateFlow<Map<String, String>>(emptyMap())
@@ -49,6 +52,7 @@ class TvBrowseViewModel(application: Application) : AndroidViewModel(application
     fun loadVideos() {
         loadVideosJob?.cancel()
         loadVideosJob = viewModelScope.launch {
+            _isLoading.value = _videos.value.isEmpty()
             repository.getVideos(getApplication()).collect { latestVideos ->
                 // Bug 4 fix (Android TV 9): Do NOT prune _deletedIds based on whether the
                 // file is still in MediaStore. On Android 9, MediaStore takes 1-2 seconds to
@@ -61,6 +65,7 @@ class TvBrowseViewModel(application: Application) : AndroidViewModel(application
                     latestVideos.find { it.id == id }?.title != newTitle
                 }
                 _videos.value = latestVideos
+                _isLoading.value = false
             }
         }
     }

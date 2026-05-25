@@ -52,6 +52,9 @@ dependencies {
     implementation(libs.androidx.navigation.compose)
     implementation(libs.coil.compose)
     implementation(libs.coil.video)
+    implementation(libs.ffmpeg.retriever.core)
+    implementation(libs.ffmpeg.retriever.native)
+
 
     
     implementation(libs.androidx.media3.ui)
