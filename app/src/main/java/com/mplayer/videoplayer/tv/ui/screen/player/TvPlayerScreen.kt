@@ -348,13 +348,15 @@ fun TvPlayerScreen(
                             val newTarget = (seekTargetMs + direction * seekMs)
                                 .coerceIn(0L, duration.takeIf { it > 0 } ?: Long.MAX_VALUE)
                             seekTargetMs = newTarget
-                            viewModel.seekToTarget(newTarget, direction)
                             
                             // Show overlay with target position + delta
                             showSeekOverlay = true
                             seekOverlayJob?.cancel()
                             seekOverlayJob = seekOverlayScope.launch {
                                 delay(1_500)
+                                if (seekTargetMs >= 0L) {
+                                    viewModel.seekToTarget(seekTargetMs, direction)
+                                }
                                 showSeekOverlay = false
                                 seekTargetMs = -1L
                             }
@@ -364,6 +366,10 @@ fun TvPlayerScreen(
                             }
                             controlsInteractionTrigger++
                         } else if (event.type == KeyEventType.KeyUp) {
+                            // Perform actual seek exactly once when user releases the button
+                            if (seekTargetMs >= 0L) {
+                                viewModel.seekToTarget(seekTargetMs, direction)
+                            }
                             // Start timer to hide overlay and reset target
                             seekOverlayJob?.cancel()
                             seekOverlayJob = seekOverlayScope.launch {

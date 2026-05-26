@@ -242,20 +242,16 @@ class PlayerManager(private val context: Context) {
 
     fun seekForwardTo(positionMs: Long) {
         val player = instance ?: return
-        player.setSeekParameters(SeekParameters.NEXT_SYNC)
+        player.setSeekParameters(SeekParameters.DEFAULT)
         player.seekTo(positionMs)
     }
 
     fun seekBackwardTo(positionMs: Long) {
         val player = instance ?: return
-        player.setSeekParameters(SeekParameters.PREVIOUS_SYNC)
+        player.setSeekParameters(SeekParameters.DEFAULT)
         player.seekTo(positionMs)
     }
 
-    /**
-     * Seek backward (e.g. Left arrow on TV remote).
-     * Uses PREVIOUS_SYNC for accurate backward seek — same as reference Player-master.
-     */
     fun seekBackward(deltaMs: Long = 10_000L) {
         val player = instance ?: return
         val duration = player.duration.takeIf { it > 0 }
@@ -264,14 +260,10 @@ class PlayerManager(private val context: Context) {
         } else {
             (player.currentPosition - deltaMs).coerceAtLeast(0L)
         }
-        player.setSeekParameters(SeekParameters.PREVIOUS_SYNC)
+        player.setSeekParameters(SeekParameters.DEFAULT)
         player.seekTo(target)
     }
 
-    /**
-     * Seek forward (e.g. Right arrow on TV remote).
-     * Uses NEXT_SYNC for accurate forward seek — same as reference Player-master.
-     */
     fun seekForward(deltaMs: Long = 10_000L) {
         val player = instance ?: return
         val duration = player.duration.takeIf { it > 0 }
@@ -280,7 +272,7 @@ class PlayerManager(private val context: Context) {
         } else {
             (player.currentPosition + deltaMs).coerceAtLeast(0L)
         }
-        player.setSeekParameters(SeekParameters.NEXT_SYNC)
+        player.setSeekParameters(SeekParameters.DEFAULT)
         player.seekTo(target)
     }
 
