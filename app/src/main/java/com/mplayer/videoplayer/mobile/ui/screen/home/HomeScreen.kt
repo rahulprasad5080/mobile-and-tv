@@ -35,11 +35,14 @@ fun HomeScreen(
     viewModel: HomeViewModel,
     onVideoClick: (VideoMediaItem) -> Unit,
     onFolderClick: (String, List<VideoMediaItem>) -> Unit,
-    onDeleteFolder: (String) -> Unit
+    onDeleteFolder: (String) -> Unit,
+    onRenameFolder: (String, String) -> Unit
 ) {
     val groupedVideos by viewModel.groupedVideos.collectAsState()
     val lastPlayedVideo by viewModel.lastPlayedVideo.collectAsState()
     var folderToDelete by remember { mutableStateOf<Pair<String, Int>?>(null) }
+    var folderToRename by remember { mutableStateOf<String?>(null) }
+    var newFolderName by remember { mutableStateOf("") }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -90,7 +93,11 @@ fun HomeScreen(
                             videoCount = videos.size,
                             isTrash = folderName == "Trash",
                             onClick = { onFolderClick(folderName, videos) },
-                            onDeleteFolder = { folderToDelete = Pair(folderName, videos.size) }
+                            onDeleteFolder = { folderToDelete = Pair(folderName, videos.size) },
+                            onRenameFolder = {
+                                folderToRename = folderName
+                                newFolderName = folderName
+                            }
                         )
                     }
                 }
@@ -148,6 +155,43 @@ fun HomeScreen(
             textContentColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
         )
     }
+
+    // Folder Rename Dialog
+    if (folderToRename != null) {
+        AlertDialog(
+            onDismissRequest = { folderToRename = null },
+            title = { Text("Rename Folder", fontWeight = FontWeight.Bold) },
+            text = {
+                TextField(
+                    value = newFolderName,
+                    onValueChange = { newFolderName = it },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        if (newFolderName.isNotBlank() && newFolderName != folderToRename) {
+                            onRenameFolder(folderToRename!!, newFolderName)
+                        }
+                        folderToRename = null
+                    }
+                ) {
+                    Text("Rename")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { folderToRename = null }) {
+                    Text("Cancel", color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+                }
+            },
+            shape = RoundedCornerShape(24.dp),
+            containerColor = MaterialTheme.colorScheme.surface,
+            titleContentColor = MaterialTheme.colorScheme.onSurface,
+            textContentColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
+        )
+    }
 }
 
 @Composable
@@ -156,7 +200,8 @@ fun FolderItem(
     videoCount: Int,
     isTrash: Boolean = false,
     onClick: () -> Unit,
-    onDeleteFolder: () -> Unit = {}
+    onDeleteFolder: () -> Unit = {},
+    onRenameFolder: () -> Unit = {}
 ) {
     val isDark = isSystemInDarkTheme()
     var showMenu by remember { mutableStateOf(false) }
@@ -247,7 +292,7 @@ fun FolderItem(
                     },
                     onClick = {
                         showMenu = false
-                        android.widget.Toast.makeText(context, "Rename folder feature coming soon", android.widget.Toast.LENGTH_SHORT).show()
+                        onRenameFolder()
                     }
                 )
 

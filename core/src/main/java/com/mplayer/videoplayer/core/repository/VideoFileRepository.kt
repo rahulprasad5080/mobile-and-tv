@@ -13,6 +13,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileOutputStream
+import com.mplayer.videoplayer.core.model.VideoMediaItem
 
 class VideoFileRepository {
 
@@ -56,6 +57,45 @@ class VideoFileRepository {
                     throw e
                 }
             }
+        }
+    }
+
+    suspend fun deleteVideos(context: Context, uris: List<Uri>): IntentSender? {
+        return withContext(Dispatchers.IO) {
+            if (uris.isEmpty()) return@withContext null
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && uris.first().scheme == "content") {
+                return@withContext MediaStore.createDeleteRequest(
+                    context.contentResolver,
+                    uris
+                ).intentSender
+            }
+
+            var pendingIntentSender: IntentSender? = null
+            for (uri in uris) {
+                val path = getPathFromUri(context, uri)
+                try {
+                    val deletedRows = if (uri.scheme == "content") {
+                        context.contentResolver.delete(uri, null, null)
+                    } else {
+                        0
+                    }
+
+                    val file = path?.let { File(it) }
+                    if (file != null && file.exists()) {
+                        file.delete()
+                    }
+
+                    path?.takeIf { !File(it).exists() }?.let {
+                        MediaScannerConnection.scanFile(context, arrayOf(it), null, null)
+                    }
+                } catch (e: SecurityException) {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && e is RecoverableSecurityException) {
+                        pendingIntentSender = e.userAction.actionIntent.intentSender
+                        break
+                    }
+                }
+            }
+            pendingIntentSender
         }
     }
 
@@ -105,12 +145,126 @@ class VideoFileRepository {
                 }
                 null
             } catch (e: SecurityException) {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && e is RecoverableSecurityException) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && uri.scheme == "content") {
+                    MediaStore.createWriteRequest(context.contentResolver, listOf(uri)).intentSender
+                } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && e is RecoverableSecurityException) {
                     e.userAction.actionIntent.intentSender
                 } else {
                     throw e
                 }
             }
+        }
+    }
+
+    suspend fun renameFolder(
+        context: Context,
+        videos: List<VideoMediaItem>,
+        newFolderName: String,
+        requestPermission: Boolean = true
+    ): IntentSender? {
+        return withContext(Dispatchers.IO) {
+            if (videos.isEmpty()) return@withContext null
+            val uris = videos.map { it.uri }
+
+            if (requestPermission && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && uris.first().scheme == "content") {
+                return@withContext MediaStore.createWriteRequest(
+                    context.contentResolver,
+                    uris
+                ).intentSender
+            }
+
+            var pendingIntentSender: IntentSender? = null
+            
+            // 1. Try to rename the directory itself using direct File API.
+            // On legacy external storage (like Android 10 with requestLegacyExternalStorage="true" or API <= 28)
+            // this will succeed and rename all files (including subtitles, .nomedia, etc.) instantly.
+            var directoryRenamed = false
+            val firstVideo = videos.firstOrNull()
+            val firstOldPath = firstVideo?.filePath ?: firstVideo?.let { getPathFromUri(context, it.uri) }
+            if (firstOldPath != null) {
+                val file = File(firstOldPath)
+                val parentFile = file.parentFile
+                if (parentFile != null && parentFile.exists()) {
+                    val grandparentFile = parentFile.parentFile
+                    if (grandparentFile != null && grandparentFile.exists()) {
+                        val targetFolder = File(grandparentFile, newFolderName)
+                        try {
+                            if (parentFile.renameTo(targetFolder)) {
+                                directoryRenamed = true
+                                val oldPaths = videos.mapNotNull { it.filePath ?: getPathFromUri(context, it.uri) }
+                                val newPaths = videos.mapNotNull { video ->
+                                    val path = video.filePath ?: getPathFromUri(context, video.uri)
+                                    path?.let { p ->
+                                        val filename = File(p).name
+                                        File(targetFolder, filename).absolutePath
+                                    }
+                                }
+                                val pathsToScan = (oldPaths + newPaths).toTypedArray()
+                                MediaScannerConnection.scanFile(context, pathsToScan, null, null)
+                            }
+                        } catch (e: Exception) {
+                            e.printStackTrace()
+                        }
+                    }
+                }
+            }
+
+            // 2. If directory renaming did not succeed (e.g. Scoped Storage on Android 11+), fall back to moving files individually
+            if (!directoryRenamed) {
+                for (video in videos) {
+                    val uri = video.uri
+                    val oldPath = getPathFromUri(context, uri) ?: video.filePath ?: continue
+
+                    val file = File(oldPath)
+                    val parentFile = file.parentFile ?: continue
+                    val grandparentFile = parentFile.parentFile ?: continue
+
+                    val relativePath = parentFile.absolutePath.replace('\\', '/').trimEnd('/')
+                    val storageMarker = "/storage/emulated/0/"
+                    val newRelativePath = if (relativePath.startsWith(storageMarker)) {
+                        val rel = relativePath.removePrefix(storageMarker)
+                        val parentRel = rel.substringBeforeLast('/', "")
+                        if (parentRel.isNotEmpty()) "$parentRel/$newFolderName/" else "$newFolderName/"
+                    } else {
+                        "$newFolderName/"
+                    }
+
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && uri.scheme == "content") {
+                        val values = ContentValues().apply {
+                            put(MediaStore.Video.Media.RELATIVE_PATH, newRelativePath)
+                        }
+                        try {
+                            context.contentResolver.update(uri, values, null, null)
+                            val newPath = getPathFromUri(context, uri)
+                            val pathsToScan = mutableListOf<String>()
+                            oldPath.let { pathsToScan.add(it) }
+                            newPath?.let { pathsToScan.add(it) }
+                            if (pathsToScan.isNotEmpty()) {
+                                MediaScannerConnection.scanFile(context, pathsToScan.toTypedArray(), null, null)
+                            }
+                        } catch (e: SecurityException) {
+                            if (e is RecoverableSecurityException) {
+                                pendingIntentSender = e.userAction.actionIntent.intentSender
+                                break
+                            }
+                        }
+                    } else {
+                        try {
+                            val targetFolder = File(grandparentFile, newFolderName)
+                            if (!targetFolder.exists()) {
+                                targetFolder.mkdirs()
+                            }
+                            val targetFile = File(targetFolder, file.name)
+                            if (file.renameTo(targetFile)) {
+                                MediaScannerConnection.scanFile(context, arrayOf(file.absolutePath, targetFile.absolutePath), null, null)
+                            }
+                        } catch (e: Exception) {
+                            e.printStackTrace()
+                        }
+                    }
+                }
+            }
+            pendingIntentSender
         }
     }
 
@@ -126,10 +280,9 @@ class VideoFileRepository {
 
     suspend fun copyVideoToFolder(context: Context, sourceUri: Uri, targetFolder: File): Boolean {
         return withContext(Dispatchers.IO) {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                return@withContext copyVideoToMediaStore(context, sourceUri, targetFolder)
-            }
-
+            // 1. First, try direct file system copy.
+            // On Android 9 and below, or Android 10 with requestLegacyExternalStorage="true",
+            // or writeable directories on Android 11+, this will succeed and support custom folder paths (e.g. WhatsApp Video).
             try {
                 val sourceName = getFileNameFromUri(context, sourceUri) ?: "video_${System.currentTimeMillis()}.mp4"
                 if (!targetFolder.exists()) {
@@ -137,52 +290,63 @@ class VideoFileRepository {
                 }
                 val targetFile = uniqueTargetFile(targetFolder, sourceName)
                 
-                val inputStream = context.contentResolver.openInputStream(sourceUri) ?: return@withContext false
-                inputStream.use { input ->
-                    FileOutputStream(targetFile).use { output ->
-                        input.copyTo(output)
+                val inputStream = context.contentResolver.openInputStream(sourceUri)
+                if (inputStream != null) {
+                    inputStream.use { input ->
+                        FileOutputStream(targetFile).use { output ->
+                            input.copyTo(output)
+                        }
                     }
+                    MediaScannerConnection.scanFile(context, arrayOf(targetFile.absolutePath), null, null)
+                    return@withContext true
                 }
-
-                MediaScannerConnection.scanFile(context, arrayOf(targetFile.absolutePath), null, null)
-                true
             } catch (e: Exception) {
                 e.printStackTrace()
-                false
             }
+
+            // 2. Fallback to MediaStore insertion (required for Scoped Storage restricted folders on Android 10+)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                return@withContext copyVideoToMediaStore(context, sourceUri, targetFolder)
+            }
+            false
         }
     }
 
     private fun copyVideoToMediaStore(context: Context, sourceUri: Uri, targetFolder: File): Boolean {
-        val resolver = context.contentResolver
-        val sourceName = getFileNameFromUri(context, sourceUri) ?: "video_${System.currentTimeMillis()}.mp4"
-        val relativePath = relativeMediaPath(targetFolder)
-        val targetName = uniqueMediaStoreName(context, relativePath, sourceName)
-        val mimeType = resolver.getType(sourceUri) ?: "video/mp4"
-
-        val values = ContentValues().apply {
-            put(MediaStore.Video.Media.DISPLAY_NAME, targetName)
-            put(MediaStore.Video.Media.MIME_TYPE, mimeType)
-            put(MediaStore.Video.Media.RELATIVE_PATH, relativePath)
-            put(MediaStore.Video.Media.IS_PENDING, 1)
-        }
-
-        val targetUri = resolver.insert(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, values) ?: return false
         return try {
-            val inputStream = resolver.openInputStream(sourceUri) ?: error("Unable to open source video")
-            inputStream.use { input ->
-                val outputStream = resolver.openOutputStream(targetUri) ?: error("Unable to open target video")
-                outputStream.use { output ->
-                    input.copyTo(output)
-                }
+            val resolver = context.contentResolver
+            val sourceName = getFileNameFromUri(context, sourceUri) ?: "video_${System.currentTimeMillis()}.mp4"
+            val relativePath = relativeMediaPath(targetFolder)
+            val targetName = uniqueMediaStoreName(context, relativePath, sourceName)
+            val mimeType = resolver.getType(sourceUri) ?: "video/mp4"
+
+            val values = ContentValues().apply {
+                put(MediaStore.Video.Media.DISPLAY_NAME, targetName)
+                put(MediaStore.Video.Media.MIME_TYPE, mimeType)
+                put(MediaStore.Video.Media.RELATIVE_PATH, relativePath)
+                put(MediaStore.Video.Media.IS_PENDING, 1)
             }
 
-            values.clear()
-            values.put(MediaStore.Video.Media.IS_PENDING, 0)
-            resolver.update(targetUri, values, null, null)
-            true
+            val targetUri = resolver.insert(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, values) ?: return false
+            try {
+                val inputStream = resolver.openInputStream(sourceUri) ?: error("Unable to open source video")
+                inputStream.use { input ->
+                    val outputStream = resolver.openOutputStream(targetUri) ?: error("Unable to open target video")
+                    outputStream.use { output ->
+                        input.copyTo(output)
+                    }
+                }
+
+                values.clear()
+                values.put(MediaStore.Video.Media.IS_PENDING, 0)
+                resolver.update(targetUri, values, null, null)
+                true
+            } catch (e: Exception) {
+                resolver.delete(targetUri, null, null)
+                e.printStackTrace()
+                false
+            }
         } catch (e: Exception) {
-            resolver.delete(targetUri, null, null)
             e.printStackTrace()
             false
         }
@@ -228,12 +392,27 @@ class VideoFileRepository {
     private fun relativeMediaPath(targetFolder: File): String {
         val normalizedPath = targetFolder.absolutePath.replace('\\', '/').trimEnd('/')
         val storageMarker = "/storage/emulated/0/"
-        val relativePath = if (normalizedPath.startsWith(storageMarker)) {
+        var relativePath = if (normalizedPath.startsWith(storageMarker)) {
             normalizedPath.removePrefix(storageMarker)
         } else {
             targetFolder.name
         }
-        return relativePath.trim('/').ifBlank { "Movies" } + "/"
+        relativePath = relativePath.trim('/')
+        if (relativePath.isBlank()) {
+            return "Movies/"
+        }
+
+        val lower = relativePath.lowercase() + "/"
+        val isStandard = lower.startsWith("dcim/") ||
+                         lower.startsWith("movies/") ||
+                         lower.startsWith("pictures/") ||
+                         lower.startsWith("download/")
+
+        return if (isStandard) {
+            "$relativePath/"
+        } else {
+            "Movies/$relativePath/"
+        }
     }
 
     private fun uniqueMediaStoreName(context: Context, relativePath: String, sourceName: String): String {

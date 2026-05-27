@@ -51,9 +51,16 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _deletedIds = MutableStateFlow<Set<String>>(emptySet())
     private val _renamedItems = MutableStateFlow<Map<String, String>>(emptyMap())
+    private val _renamedFolders = MutableStateFlow<Map<String, String>>(emptyMap())
 
     private var pendingDeleteId: String? = null
     private var pendingRenameId: String? = null
+    private var pendingRenameVideo: VideoMediaItem? = null
+    private var pendingRenameVideoNewName: String? = null
+    private var pendingDeleteIds: List<String>? = null
+    private var pendingRenameFolderOldName: String? = null
+    private var pendingRenameFolderNewName: String? = null
+    private var pendingRenameFolderVideos: List<VideoMediaItem>? = null
 
     private val _copiedVideo = MutableStateFlow<VideoMediaItem?>(null)
     val copiedVideo: StateFlow<VideoMediaItem?> = _copiedVideo.asStateFlow()
@@ -62,11 +69,15 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         _videos, 
         _searchQuery, 
         _deletedIds, 
-        _renamedItems
-    ) { videos, query, deleted, renamed ->
+        _renamedItems,
+        _renamedFolders
+    ) { videos, query, deleted, renamedItems, renamedFolders ->
         videos.filter { it.id !in deleted }
             .map { video ->
-                renamed[video.id]?.let { video.copy(title = it) } ?: video
+                var updatedVideo = video
+                renamedItems[video.id]?.let { updatedVideo = updatedVideo.copy(title = it) }
+                renamedFolders[video.folderName]?.let { updatedVideo = updatedVideo.copy(folderName = it) }
+                updatedVideo
             }
             .filter { query.isBlank() || it.title.contains(query, ignoreCase = true) }
     }.stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
@@ -91,14 +102,20 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 // MediaStore can briefly report stale rows after deletion, which would make
                 // deleted videos reappear if we prune _deletedIds during a refresh.
                 val currentRenamed = _renamedItems.value
-                
                 if (currentRenamed.isNotEmpty()) {
                     val newRenamed = currentRenamed.filter { (id, newTitle) ->
                         val item = it.find { video -> video.id == id }
                         item != null && item.title != newTitle
                     }
-                    
                     _renamedItems.value = newRenamed
+                }
+
+                val currentRenamedFolders = _renamedFolders.value
+                if (currentRenamedFolders.isNotEmpty()) {
+                    val newRenamedFolders = currentRenamedFolders.filter { (oldFolder, _) ->
+                        it.any { video -> video.folderName == oldFolder }
+                    }
+                    _renamedFolders.value = newRenamedFolders
                 }
 
                 _videos.value = it
@@ -196,14 +213,18 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         val ids = videos.map { it.id }.toSet()
         _deletedIds.value = _deletedIds.value + ids
         viewModelScope.launch {
-            videos.forEach { video ->
-                try {
-                    fileRepository.deleteVideo(getApplication(), video.uri)
-                } catch (e: Exception) {
-                    _deletedIds.value = _deletedIds.value - video.id
+            try {
+                val intentSender = fileRepository.deleteVideos(getApplication(), videos.map { it.uri })
+                if (intentSender != null) {
+                    pendingDeleteIds = videos.map { it.id }
+                    _pendingIntent.value = intentSender
+                } else {
+                    loadVideos()
                 }
+            } catch (e: Exception) {
+                _deletedIds.value = _deletedIds.value - ids
+                loadVideos()
             }
-            loadVideos()
         }
     }
 
@@ -219,13 +240,38 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             try {
                 val intentSender = fileRepository.renameVideo(getApplication(), video.uri, newName)
                 if (intentSender != null) {
-                    pendingRenameId = video.id
+                    pendingRenameVideo = video
+                    pendingRenameVideoNewName = newName
                     _pendingIntent.value = intentSender
                 } else {
                     loadVideos()
                 }
             } catch (e: Exception) {
                 _renamedItems.value = _renamedItems.value - video.id
+                loadVideos()
+            }
+        }
+    }
+
+    fun renameFolder(oldFolderName: String, newFolderName: String) {
+        val folderVideos = _videos.value.filter { it.folderName == oldFolderName }
+        if (folderVideos.isEmpty()) return
+
+        _renamedFolders.value = _renamedFolders.value + (oldFolderName to newFolderName)
+
+        viewModelScope.launch {
+            try {
+                val intentSender = fileRepository.renameFolder(getApplication(), folderVideos, newFolderName)
+                if (intentSender != null) {
+                    pendingRenameFolderOldName = oldFolderName
+                    pendingRenameFolderNewName = newFolderName
+                    pendingRenameFolderVideos = folderVideos
+                    _pendingIntent.value = intentSender
+                } else {
+                    loadVideos()
+                }
+            } catch (e: Exception) {
+                _renamedFolders.value = _renamedFolders.value - oldFolderName
                 loadVideos()
             }
         }
@@ -277,7 +323,8 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
         viewModelScope.launch {
             val targetFolder = File(targetFolderPath)
-            val movedIds = mutableListOf<String>()
+            val movedVideos = mutableListOf<VideoMediaItem>()
+            
             videos.forEach { video ->
                 val copied = fileRepository.copyVideoToFolder(
                     getApplication(),
@@ -285,20 +332,27 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                     targetFolder
                 )
                 if (copied) {
-                    movedIds += video.id
-                    _deletedIds.value = _deletedIds.value + video.id
-                    try {
-                        val intentSender = fileRepository.deleteVideo(getApplication(), video.uri)
-                        if (intentSender != null) {
-                            _pendingIntent.value = intentSender
-                        }
-                    } catch (e: Exception) {
-                        _deletedIds.value = _deletedIds.value - video.id
-                    }
+                    movedVideos.add(video)
                 }
             }
-            if (movedIds.isNotEmpty()) {
-                loadVideos()
+
+            if (movedVideos.isNotEmpty()) {
+                val movedIds = movedVideos.map { it.id }.toSet()
+                _deletedIds.value = _deletedIds.value + movedIds
+                
+                try {
+                    val urisToDelete = movedVideos.map { it.uri }
+                    val intentSender = fileRepository.deleteVideos(getApplication(), urisToDelete)
+                    if (intentSender != null) {
+                        pendingDeleteIds = movedVideos.map { it.id }
+                        _pendingIntent.value = intentSender
+                    } else {
+                        loadVideos()
+                    }
+                } catch (e: Exception) {
+                    _deletedIds.value = _deletedIds.value - movedIds
+                    loadVideos()
+                }
             }
         }
     }
@@ -308,16 +362,52 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun handleIntentSenderResult(success: Boolean) {
-        val pRenameId = pendingRenameId
+        val pRenameVideo = pendingRenameVideo
+        val pRenameVideoNewName = pendingRenameVideoNewName
         val pDeleteId = pendingDeleteId
-        pendingDeleteId = null
-        pendingRenameId = null
+        val pDeleteIds = pendingDeleteIds
+        
+        val pRenameOld = pendingRenameFolderOldName
+        val pRenameNew = pendingRenameFolderNewName
+        val pRenameVideos = pendingRenameFolderVideos
 
-        if (!success) {
+        pendingDeleteId = null
+        pendingDeleteIds = null
+        pendingRenameVideo = null
+        pendingRenameVideoNewName = null
+        pendingRenameFolderOldName = null
+        pendingRenameFolderNewName = null
+        pendingRenameFolderVideos = null
+
+        if (success) {
+            if (pRenameVideo != null && pRenameVideoNewName != null) {
+                viewModelScope.launch {
+                    try {
+                        fileRepository.renameVideo(getApplication(), pRenameVideo.uri, pRenameVideoNewName)
+                        loadVideos()
+                    } catch (e: Exception) {
+                        _renamedItems.value = _renamedItems.value - pRenameVideo.id
+                        loadVideos()
+                    }
+                }
+            }
+            if (pRenameOld != null && pRenameNew != null && pRenameVideos != null) {
+                viewModelScope.launch {
+                    try {
+                        fileRepository.renameFolder(getApplication(), pRenameVideos, pRenameNew, requestPermission = false)
+                        loadVideos()
+                    } catch (e: Exception) {
+                        loadVideos()
+                    }
+                }
+            }
+        } else {
             pDeleteId?.let { _deletedIds.value = _deletedIds.value - it }
-            pRenameId?.let { _renamedItems.value = _renamedItems.value - it }
+            pDeleteIds?.let { _deletedIds.value = _deletedIds.value - it.toSet() }
+            pRenameVideo?.let { _renamedItems.value = _renamedItems.value - it.id }
+            pRenameOld?.let { _renamedFolders.value = _renamedFolders.value - it }
         }
-        // Always refresh after intent result — OS handles the actual rename/delete on success
+        // Always refresh after intent result — OS handles the actual delete on success
         loadVideos()
     }
 

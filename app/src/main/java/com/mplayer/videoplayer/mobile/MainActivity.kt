@@ -300,6 +300,9 @@ class MainActivity : ComponentActivity() {
                     },
                     onDeleteFolder = { folderName ->
                         homeViewModel.deleteFolder(folderName)
+                    },
+                    onRenameFolder = { oldName, newName ->
+                        homeViewModel.renameFolder(oldName, newName)
                     }
                 )
             }

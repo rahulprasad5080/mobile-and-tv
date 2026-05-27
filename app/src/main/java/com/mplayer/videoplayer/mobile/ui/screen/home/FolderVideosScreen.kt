@@ -162,14 +162,6 @@ fun FolderVideosScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Button(
-                            onClick = { pendingAction = FileAction.Copy },
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Icon(Icons.Default.ContentCopy, contentDescription = null)
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text("Copy")
-                        }
-                        Button(
                             onClick = { pendingAction = FileAction.Move },
                             modifier = Modifier.weight(1f)
                         ) {
