@@ -106,8 +106,12 @@ class VideoRepository {
             }
         }
 
-        // 2. Perform direct filesystem scans to find any missed videos (both internal and USB)
+        // Emit MediaStore results immediately so the UI is updated in milliseconds
+        emit(ArrayList(localVideos))
+
+        // 2. Perform direct filesystem scans in the background to find any missed videos
         try {
+            var foundAnyNew = false
             val storageDir = File("/storage")
             if (storageDir.exists() && storageDir.isDirectory) {
                 val volumesDirs = storageDir.listFiles()
@@ -123,7 +127,8 @@ class VideoRepository {
                                 for (folderName in standardFolders) {
                                     val folder = File(primaryInternal, folderName)
                                     if (folder.exists() && folder.isDirectory) {
-                                        scanDirectoryForVideos(folder, localVideos, seenPaths, depth = 1)
+                                        val added = scanDirectoryForVideos(folder, localVideos, seenPaths, depth = 1)
+                                        foundAnyNew = foundAnyNew || added
                                     }
                                 }
                                 // Also scan files directly in the root of internal storage
@@ -131,29 +136,31 @@ class VideoRepository {
                                 if (rootFiles != null) {
                                     for (file in rootFiles) {
                                         if (file.isFile) {
-                                            addLocalVideoFile(file, localVideos, seenPaths)
+                                            val added = addLocalVideoFile(file, localVideos, seenPaths)
+                                            foundAnyNew = foundAnyNew || added
                                         }
                                     }
                                 }
                             }
                         } else {
                             // Removable storage volume (USB pendrive / SD card)
-                            // We can scan the entire USB drive because they are usually dedicated to media
-                            scanDirectoryForVideos(volume, localVideos, seenPaths, depth = 1)
+                            val added = scanDirectoryForVideos(volume, localVideos, seenPaths, depth = 1)
+                            foundAnyNew = foundAnyNew || added
                         }
                     }
                 }
             }
+            if (foundAnyNew) {
+                emit(ArrayList(localVideos))
+            }
         } catch (e: Exception) {
             e.printStackTrace()
         }
-
-        emit(localVideos)
     }.flowOn(Dispatchers.IO)
 
-    private fun addLocalVideoFile(file: File, localVideos: MutableList<VideoMediaItem>, seenPaths: MutableSet<String>) {
+    private fun addLocalVideoFile(file: File, localVideos: MutableList<VideoMediaItem>, seenPaths: MutableSet<String>): Boolean {
         val path = file.absolutePath
-        if (seenPaths.contains(path)) return
+        if (seenPaths.contains(path)) return false
         val ext = file.extension.lowercase()
         val isVideo = ext in listOf("mp4", "mkv", "avi", "mov", "webm", "flv", "3gp", "ts")
         if (isVideo) {
@@ -172,22 +179,28 @@ class VideoRepository {
                     duration = 0L
                 )
             )
+            return true
         }
+        return false
     }
 
-    private fun scanDirectoryForVideos(dir: File, localVideos: MutableList<VideoMediaItem>, seenPaths: MutableSet<String>, depth: Int) {
-        if (depth > 3 || !dir.exists() || !dir.isDirectory) return
-        val files = dir.listFiles() ?: return
+    private fun scanDirectoryForVideos(dir: File, localVideos: MutableList<VideoMediaItem>, seenPaths: MutableSet<String>, depth: Int): Boolean {
+        if (depth > 3 || !dir.exists() || !dir.isDirectory) return false
+        val files = dir.listFiles() ?: return false
+        var addedAny = false
         for (file in files) {
             if (file.isDirectory) {
                 val name = file.name.lowercase()
                 if (!file.name.startsWith(".") && name != "android" && name != "lost.dir") {
-                    scanDirectoryForVideos(file, localVideos, seenPaths, depth + 1)
+                    val added = scanDirectoryForVideos(file, localVideos, seenPaths, depth + 1)
+                    addedAny = addedAny || added
                 }
             } else {
-                addLocalVideoFile(file, localVideos, seenPaths)
+                val added = addLocalVideoFile(file, localVideos, seenPaths)
+                addedAny = addedAny || added
             }
         }
+        return addedAny
     }
 
     private fun formatDuration(ms: Long): String {
