@@ -24,12 +24,15 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.ContentPaste
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.DriveFileMove
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.SelectAll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.DropdownMenu
@@ -75,6 +78,7 @@ fun FolderVideosScreen(
     onVideoClick: (VideoMediaItem) -> Unit,
     onRename: (VideoMediaItem, String) -> Unit,
     onDelete: (VideoMediaItem) -> Unit,
+    onDeleteSelected: (List<VideoMediaItem>) -> Unit,
     onCopy: (VideoMediaItem) -> Unit,
     onCopySelected: (List<VideoMediaItem>, String?) -> Unit,
     onMoveSelected: (List<VideoMediaItem>, String?) -> Unit,
@@ -84,6 +88,7 @@ fun FolderVideosScreen(
 ) {
     var videoToRename by remember { mutableStateOf<VideoMediaItem?>(null) }
     var videoToDelete by remember { mutableStateOf<VideoMediaItem?>(null) }
+    var showBulkDeleteDialog by remember { mutableStateOf(false) }
     // Show name without extension so user doesn't accidentally change/remove it
     var newName by remember { mutableStateOf("") }
     var selectedIds by remember(videos) { mutableStateOf(emptySet<String>()) }
@@ -153,7 +158,7 @@ fun FolderVideosScreen(
                             .fillMaxWidth()
                             .navigationBarsPadding()
                             .padding(horizontal = 16.dp, vertical = 10.dp),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Button(
@@ -161,7 +166,7 @@ fun FolderVideosScreen(
                             modifier = Modifier.weight(1f)
                         ) {
                             Icon(Icons.Default.ContentCopy, contentDescription = null)
-                            Spacer(modifier = Modifier.width(8.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
                             Text("Copy")
                         }
                         Button(
@@ -169,8 +174,20 @@ fun FolderVideosScreen(
                             modifier = Modifier.weight(1f)
                         ) {
                             Icon(Icons.Default.DriveFileMove, contentDescription = null)
-                            Spacer(modifier = Modifier.width(8.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
                             Text("Move")
+                        }
+                        Button(
+                            onClick = { showBulkDeleteDialog = true },
+                            modifier = Modifier.weight(1f),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.error,
+                                contentColor = MaterialTheme.colorScheme.onError
+                            )
+                        ) {
+                            Icon(Icons.Default.Delete, contentDescription = null)
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Delete")
                         }
                     }
                 }
@@ -259,7 +276,7 @@ fun FolderVideosScreen(
         )
     }
 
-    // Delete Dialog
+    // Single Delete Dialog
     if (videoToDelete != null) {
         AlertDialog(
             onDismissRequest = { videoToDelete = null },
@@ -275,6 +292,29 @@ fun FolderVideosScreen(
             },
             dismissButton = {
                 TextButton(onClick = { videoToDelete = null }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
+    // Bulk Delete Dialog
+    if (showBulkDeleteDialog) {
+        AlertDialog(
+            onDismissRequest = { showBulkDeleteDialog = false },
+            title = { Text("Delete ${selectedIds.size} file(s)?") },
+            text = { Text("Are you sure you want to permanently delete ${selectedIds.size} selected file(s)? This action cannot be undone.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    onDeleteSelected(selectedVideos)
+                    selectedIds = emptySet()
+                    showBulkDeleteDialog = false
+                }) {
+                    Text("Delete All", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showBulkDeleteDialog = false }) {
                     Text("Cancel")
                 }
             }
@@ -393,7 +433,11 @@ fun VideoListItem(
             if (!selectionMode) {
                 Box {
                     IconButton(onClick = { showMenu = true }) {
-                        Icon(Icons.Default.MoreVert, contentDescription = "Actions", tint = MaterialTheme.colorScheme.onBackground)
+                        Icon(
+                            imageVector = Icons.Default.MoreVert,
+                            contentDescription = "Actions",
+                            tint = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
+                        )
                     }
                     DropdownMenu(
                         expanded = showMenu,
@@ -402,18 +446,46 @@ fun VideoListItem(
                     ) {
                         DropdownMenuItem(
                             text = { Text("Rename", color = MaterialTheme.colorScheme.onSurface) },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = Icons.Default.Edit,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
+                                )
+                            },
                             onClick = { showMenu = false; onRename() }
                         )
                         DropdownMenuItem(
-                            text = { Text("Delete", color = MaterialTheme.colorScheme.onSurface) },
+                            text = { Text("Delete", color = MaterialTheme.colorScheme.error) },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = Icons.Default.Delete,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.error
+                                )
+                            },
                             onClick = { showMenu = false; onDelete() }
                         )
                         DropdownMenuItem(
                             text = { Text("Copy", color = MaterialTheme.colorScheme.onSurface) },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = Icons.Default.ContentCopy,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
+                                )
+                            },
                             onClick = { showMenu = false; onCopy() }
                         )
                         DropdownMenuItem(
                             text = { Text("Select", color = MaterialTheme.colorScheme.onSurface) },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = Icons.Default.CheckCircle,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
+                                )
+                            },
                             onClick = { showMenu = false; onSelect() }
                         )
                     }

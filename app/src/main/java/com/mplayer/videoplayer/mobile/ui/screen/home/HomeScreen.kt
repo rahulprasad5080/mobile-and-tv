@@ -1,6 +1,8 @@
 package com.mplayer.videoplayer.mobile.ui.screen.home
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
@@ -32,10 +34,12 @@ import com.mplayer.videoplayer.mobile.viewmodel.HomeViewModel
 fun HomeScreen(
     viewModel: HomeViewModel,
     onVideoClick: (VideoMediaItem) -> Unit,
-    onFolderClick: (String, List<VideoMediaItem>) -> Unit
+    onFolderClick: (String, List<VideoMediaItem>) -> Unit,
+    onDeleteFolder: (String) -> Unit
 ) {
     val groupedVideos by viewModel.groupedVideos.collectAsState()
     val lastPlayedVideo by viewModel.lastPlayedVideo.collectAsState()
+    var folderToDelete by remember { mutableStateOf<Pair<String, Int>?>(null) }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -83,25 +87,81 @@ fun HomeScreen(
                     item(key = folderName) {
                         FolderItem(
                             name = folderName,
-                            badgeCount = 0,
+                            videoCount = videos.size,
                             isTrash = folderName == "Trash",
-                            onClick = { onFolderClick(folderName, videos) }
+                            onClick = { onFolderClick(folderName, videos) },
+                            onDeleteFolder = { folderToDelete = Pair(folderName, videos.size) }
                         )
                     }
                 }
             }
         }
     }
+
+    // MX Player style Folder delete confirmation dialog
+    if (folderToDelete != null) {
+        AlertDialog(
+            onDismissRequest = { folderToDelete = null },
+            title = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Default.Delete,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.size(28.dp)
+                    )
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Text(
+                        text = "Delete Folder?",
+                        style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
+                    )
+                }
+            },
+            text = {
+                Text(
+                    text = "Are you sure you want to delete folder \"${folderToDelete!!.first}\" and all of its ${folderToDelete!!.second} video(s)? This action will permanently remove these files from your device.",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        onDeleteFolder(folderToDelete!!.first)
+                        folderToDelete = null
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.error,
+                        contentColor = MaterialTheme.colorScheme.onError
+                    )
+                ) {
+                    Text("Delete All")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { folderToDelete = null }) {
+                    Text("Cancel", color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+                }
+            },
+            shape = RoundedCornerShape(24.dp),
+            containerColor = MaterialTheme.colorScheme.surface,
+            titleContentColor = MaterialTheme.colorScheme.onSurface,
+            textContentColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
+        )
+    }
 }
 
 @Composable
 fun FolderItem(
     name: String,
-    badgeCount: Int = 0,
+    videoCount: Int,
     isTrash: Boolean = false,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    onDeleteFolder: () -> Unit = {}
 ) {
     val isDark = isSystemInDarkTheme()
+    var showMenu by remember { mutableStateOf(false) }
+    val context = androidx.compose.ui.platform.LocalContext.current
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -109,35 +169,33 @@ fun FolderItem(
             .padding(horizontal = 20.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Box {
-            Icon(
-                Icons.Default.Folder,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.secondary,
-                modifier = Modifier.size(56.dp)
-            )
-            if (badgeCount > 0) {
-                Surface(
-                    color = MaterialTheme.colorScheme.error,
-                    shape = CircleShape,
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .size(20.dp)
-                        .offset(x = 4.dp, y = (-4).dp)
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Text(
-                            text = badgeCount.toString(),
-                            color = MaterialTheme.colorScheme.onError,
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Bold
-                        )
+        // MX Player style Folder Icon with dynamic colored rounded container background
+        Box(
+            modifier = Modifier
+                .size(52.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .background(
+                    if (isTrash) {
+                        MaterialTheme.colorScheme.error.copy(alpha = 0.1f)
+                    } else {
+                        MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
                     }
-                }
-            }
+                ),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = if (isTrash) Icons.Default.Delete else Icons.Default.Folder,
+                contentDescription = null,
+                tint = if (isTrash) {
+                    MaterialTheme.colorScheme.error
+                } else {
+                    MaterialTheme.colorScheme.primary
+                },
+                modifier = Modifier.size(28.dp)
+            )
         }
 
-        Spacer(modifier = Modifier.width(20.dp))
+        Spacer(modifier = Modifier.width(16.dp))
 
         Column(modifier = Modifier.weight(1f)) {
             Text(
@@ -149,11 +207,69 @@ fun FolderItem(
                         MaterialTheme.colorScheme.onBackground
                     },
                     fontWeight = FontWeight.SemiBold
+                ),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                text = if (videoCount == 1) "1 video" else "$videoCount videos",
+                style = MaterialTheme.typography.bodySmall.copy(
+                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
                 )
             )
         }
+
+        // MX Player style 3-dots Menu Button container
+        Box {
+            IconButton(onClick = { showMenu = true }) {
+                Icon(
+                    imageVector = Icons.Default.MoreVert,
+                    contentDescription = "Folder Options",
+                    tint = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
+                )
+            }
+
+            // Dropdown menu for folder actions positioned relative to the 3-dots button
+            DropdownMenu(
+                expanded = showMenu,
+                onDismissRequest = { showMenu = false },
+                modifier = Modifier.background(MaterialTheme.colorScheme.surface)
+            ) {
+                DropdownMenuItem(
+                    text = { Text("Rename", color = MaterialTheme.colorScheme.onSurface) },
+                    leadingIcon = {
+                        Icon(
+                            Icons.Default.Edit,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                        )
+                    },
+                    onClick = {
+                        showMenu = false
+                        android.widget.Toast.makeText(context, "Rename folder feature coming soon", android.widget.Toast.LENGTH_SHORT).show()
+                    }
+                )
+
+                DropdownMenuItem(
+                    text = { Text("Delete Folder", color = MaterialTheme.colorScheme.error) },
+                    leadingIcon = {
+                        Icon(
+                            Icons.Default.Delete,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.error
+                        )
+                    },
+                    onClick = {
+                        showMenu = false
+                        onDeleteFolder()
+                    }
+                )
+            }
+        }
     }
 }
+
 
 @Composable
 fun ContinueWatchingCard(

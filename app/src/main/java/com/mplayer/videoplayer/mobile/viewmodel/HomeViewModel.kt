@@ -191,6 +191,27 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun deleteVideos(videos: List<VideoMediaItem>) {
+        if (videos.isEmpty()) return
+        val ids = videos.map { it.id }.toSet()
+        _deletedIds.value = _deletedIds.value + ids
+        viewModelScope.launch {
+            videos.forEach { video ->
+                try {
+                    fileRepository.deleteVideo(getApplication(), video.uri)
+                } catch (e: Exception) {
+                    _deletedIds.value = _deletedIds.value - video.id
+                }
+            }
+            loadVideos()
+        }
+    }
+
+    fun deleteFolder(folderName: String) {
+        val folderVideos = _videos.value.filter { it.folderName == folderName }
+        deleteVideos(folderVideos)
+    }
+
     fun renameVideo(video: VideoMediaItem, newName: String) {
         _renamedItems.value = _renamedItems.value + (video.id to newName)
 

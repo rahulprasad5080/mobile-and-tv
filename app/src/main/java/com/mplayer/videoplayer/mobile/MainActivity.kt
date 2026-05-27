@@ -297,6 +297,9 @@ class MainActivity : ComponentActivity() {
                     onFolderClick = { name, _ ->
                         selectedFolderName = name
                         navController.navigate("folder_videos")
+                    },
+                    onDeleteFolder = { folderName ->
+                        homeViewModel.deleteFolder(folderName)
                     }
                 )
             }
@@ -320,6 +323,7 @@ class MainActivity : ComponentActivity() {
                     },
                     onRename = { video, newName -> homeViewModel.renameVideo(video, newName) },
                     onDelete = { video -> homeViewModel.deleteVideo(video) },
+                    onDeleteSelected = { videos -> homeViewModel.deleteVideos(videos) },
                     onCopy = { video -> homeViewModel.copyVideoToClipboard(video) },
                     onCopySelected = { videos, targetPath ->
                         homeViewModel.copyVideosToFolder(videos, targetPath)
@@ -332,7 +336,6 @@ class MainActivity : ComponentActivity() {
                         homeViewModel.pasteVideo(selectedFolderName, path) 
                     },
                     copiedVideo = homeViewModel.copiedVideo.collectAsState().value,
-
                     onBackPressed = { navController.popBackStack() }
                 )
             }
