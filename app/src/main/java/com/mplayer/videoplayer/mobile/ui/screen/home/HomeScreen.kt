@@ -2,6 +2,7 @@ package com.mplayer.videoplayer.mobile.ui.screen.home
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -26,12 +27,6 @@ import coil.compose.AsyncImage
 import com.mplayer.videoplayer.core.model.VideoMediaItem
 import com.mplayer.videoplayer.mobile.viewmodel.HomeViewModel
 
-private val DarkBackground = Color(0xFF0F1517)
-private val SurfaceColor = Color(0xFF1B2428)
-private val PrimaryBlue = Color(0xFF2196F3)
-private val FolderGrey = Color(0xFF455A64)
-private val BadgeRed = Color(0xFFF44336)
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
@@ -43,7 +38,7 @@ fun HomeScreen(
     val lastPlayedVideo by viewModel.lastPlayedVideo.collectAsState()
 
     Scaffold(
-        containerColor = DarkBackground,
+        containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             TopAppBar(
                 title = {
@@ -51,12 +46,12 @@ fun HomeScreen(
                         "Folders",
                         style = MaterialTheme.typography.headlineMedium.copy(
                             fontWeight = FontWeight.Bold,
-                            color = Color.White
+                            color = MaterialTheme.colorScheme.onBackground
                         )
                     )
                 },
 
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = DarkBackground)
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)
             )
         },
         floatingActionButton = {}
@@ -106,6 +101,7 @@ fun FolderItem(
     isTrash: Boolean = false,
     onClick: () -> Unit
 ) {
+    val isDark = isSystemInDarkTheme()
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -117,12 +113,12 @@ fun FolderItem(
             Icon(
                 Icons.Default.Folder,
                 contentDescription = null,
-                tint = FolderGrey,
+                tint = MaterialTheme.colorScheme.secondary,
                 modifier = Modifier.size(56.dp)
             )
             if (badgeCount > 0) {
                 Surface(
-                    color = BadgeRed,
+                    color = MaterialTheme.colorScheme.error,
                     shape = CircleShape,
                     modifier = Modifier
                         .align(Alignment.TopEnd)
@@ -132,7 +128,7 @@ fun FolderItem(
                     Box(contentAlignment = Alignment.Center) {
                         Text(
                             text = badgeCount.toString(),
-                            color = Color.White,
+                            color = MaterialTheme.colorScheme.onError,
                             fontSize = 10.sp,
                             fontWeight = FontWeight.Bold
                         )
@@ -147,7 +143,11 @@ fun FolderItem(
             Text(
                 text = name,
                 style = MaterialTheme.typography.titleMedium.copy(
-                    color = if (isTrash) Color(0xFF4FC3F7) else Color.White,
+                    color = if (isTrash) {
+                        if (isDark) Color(0xFF4FC3F7) else Color(0xFF0288D1)
+                    } else {
+                        MaterialTheme.colorScheme.onBackground
+                    },
                     fontWeight = FontWeight.SemiBold
                 )
             )
@@ -165,7 +165,7 @@ fun ContinueWatchingCard(
             .fillMaxWidth()
             .padding(horizontal = 20.dp, vertical = 8.dp),
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = SurfaceColor)
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
         Row(
             modifier = Modifier
@@ -206,13 +206,13 @@ fun ContinueWatchingCard(
                 Text(
                     text = "CONTINUE WATCHING",
                     style = MaterialTheme.typography.labelSmall,
-                    color = PrimaryBlue,
+                    color = MaterialTheme.colorScheme.primary,
                     fontWeight = FontWeight.Bold
                 )
                 Text(
                     text = video.title,
                     style = MaterialTheme.typography.titleMedium,
-                    color = Color.White,
+                    color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )

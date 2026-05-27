@@ -48,6 +48,7 @@ import android.app.Activity
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalConfiguration
 import com.mplayer.videoplayer.core.model.VideoMediaItem
+import com.mplayer.videoplayer.mobile.ui.theme.MPlayerTheme
 
 
 
@@ -120,7 +121,9 @@ class MainActivity : ComponentActivity() {
             if (isTelevisionDevice()) {
                 TvAppNavigation()
             } else {
-                AppNavigation()
+                MPlayerTheme {
+                    AppNavigation()
+                }
             }
         }
 

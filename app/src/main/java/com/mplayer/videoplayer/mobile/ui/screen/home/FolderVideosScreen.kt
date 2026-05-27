@@ -61,10 +61,6 @@ import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.mplayer.videoplayer.core.model.VideoMediaItem
 
-private val DarkBackground = Color(0xFF0F1517)
-private val SurfaceColor = Color(0xFF1B2428)
-private val PrimaryBlue = Color(0xFF2196F3)
-
 enum class FileAction {
     Copy,
     Move
@@ -102,7 +98,7 @@ fun FolderVideosScreen(
     }
 
     Scaffold(
-        containerColor = DarkBackground,
+        containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             TopAppBar(
                 title = {
@@ -110,7 +106,7 @@ fun FolderVideosScreen(
                         if (selectionMode) "${selectedIds.size} selected" else folderName,
                         style = MaterialTheme.typography.titleLarge.copy(
                             fontWeight = FontWeight.Bold,
-                            color = Color.White
+                            color = MaterialTheme.colorScheme.onBackground
                         )
                     )
                 },
@@ -127,7 +123,7 @@ fun FolderVideosScreen(
                         Icon(
                             if (selectionMode) Icons.Default.Close else Icons.Default.ArrowBack,
                             contentDescription = "Back",
-                            tint = Color.White
+                            tint = MaterialTheme.colorScheme.onBackground
                         )
                     }
                 },
@@ -142,16 +138,16 @@ fun FolderVideosScreen(
                                 }
                             }
                         ) {
-                            Icon(Icons.Default.SelectAll, contentDescription = "Select all", tint = Color.White)
+                            Icon(Icons.Default.SelectAll, contentDescription = "Select all", tint = MaterialTheme.colorScheme.onBackground)
                         }
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = DarkBackground)
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)
             )
         },
         bottomBar = {
             if (selectionMode) {
-                Surface(color = SurfaceColor, tonalElevation = 8.dp) {
+                Surface(color = MaterialTheme.colorScheme.surface, tonalElevation = 8.dp) {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -186,8 +182,8 @@ fun FolderVideosScreen(
                     text = { Text("Paste") },
                     icon = { Icon(Icons.Default.ContentPaste, contentDescription = null) },
                     onClick = onPaste,
-                    containerColor = PrimaryBlue,
-                    contentColor = Color.White
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary
                 )
             }
         }
@@ -326,7 +322,7 @@ fun VideoListItem(
                 onClick = onClick,
                 onLongClick = onLongClick
             ),
-        color = if (selected) PrimaryBlue.copy(alpha = 0.18f) else Color.Transparent,
+        color = if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.18f) else Color.Transparent,
         shape = RoundedCornerShape(12.dp)
     ) {
         Row(
@@ -338,8 +334,8 @@ fun VideoListItem(
                     checked = selected,
                     onCheckedChange = { onSelect() },
                     colors = CheckboxDefaults.colors(
-                        checkedColor = PrimaryBlue,
-                        uncheckedColor = Color.Gray
+                        checkedColor = MaterialTheme.colorScheme.primary,
+                        uncheckedColor = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.4f)
                     )
                 )
                 Spacer(modifier = Modifier.width(8.dp))
@@ -349,7 +345,7 @@ fun VideoListItem(
                 modifier = Modifier
                     .size(120.dp, 70.dp)
                     .clip(RoundedCornerShape(8.dp))
-                    .background(SurfaceColor)
+                    .background(MaterialTheme.colorScheme.surface)
             ) {
                 AsyncImage(
                     model = video.filePath ?: video.uri,
@@ -366,7 +362,7 @@ fun VideoListItem(
                         Icon(
                             Icons.Default.CheckCircle,
                             contentDescription = null,
-                            tint = PrimaryBlue
+                            tint = MaterialTheme.colorScheme.primary
                         )
                     }
                 }
@@ -378,7 +374,7 @@ fun VideoListItem(
                 Text(
                     text = video.title,
                     style = MaterialTheme.typography.bodyLarge.copy(
-                        color = Color.White,
+                        color = MaterialTheme.colorScheme.onBackground,
                         fontWeight = FontWeight.Medium
                     ),
                     maxLines = 1
@@ -388,7 +384,7 @@ fun VideoListItem(
                     Text(
                         text = formatVideoDuration(video.duration),
                         style = MaterialTheme.typography.bodySmall.copy(
-                            color = Color.White.copy(alpha = 0.55f)
+                            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
                         )
                     )
                 }
@@ -397,27 +393,27 @@ fun VideoListItem(
             if (!selectionMode) {
                 Box {
                     IconButton(onClick = { showMenu = true }) {
-                        Icon(Icons.Default.MoreVert, contentDescription = "Actions", tint = Color.White)
+                        Icon(Icons.Default.MoreVert, contentDescription = "Actions", tint = MaterialTheme.colorScheme.onBackground)
                     }
                     DropdownMenu(
                         expanded = showMenu,
                         onDismissRequest = { showMenu = false },
-                        modifier = Modifier.background(SurfaceColor)
+                        modifier = Modifier.background(MaterialTheme.colorScheme.surface)
                     ) {
                         DropdownMenuItem(
-                            text = { Text("Rename", color = Color.White) },
+                            text = { Text("Rename", color = MaterialTheme.colorScheme.onSurface) },
                             onClick = { showMenu = false; onRename() }
                         )
                         DropdownMenuItem(
-                            text = { Text("Delete", color = Color.White) },
+                            text = { Text("Delete", color = MaterialTheme.colorScheme.onSurface) },
                             onClick = { showMenu = false; onDelete() }
                         )
                         DropdownMenuItem(
-                            text = { Text("Copy", color = Color.White) },
+                            text = { Text("Copy", color = MaterialTheme.colorScheme.onSurface) },
                             onClick = { showMenu = false; onCopy() }
                         )
                         DropdownMenuItem(
-                            text = { Text("Select", color = Color.White) },
+                            text = { Text("Select", color = MaterialTheme.colorScheme.onSurface) },
                             onClick = { showMenu = false; onSelect() }
                         )
                     }
